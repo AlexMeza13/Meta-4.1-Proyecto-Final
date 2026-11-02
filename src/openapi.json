@@ -108,6 +108,326 @@
         }
       }
     },
+    "/auth/solicitudes": {
+      "post": {
+        "summary": "Solicitar una cuenta con correo y contraseña",
+        "description": "Endpoint público. La solicitud queda pendiente y no habilita el acceso hasta que un admin la apruebe. Solo permite los roles entrenador y jugador.",
+        "tags": [
+          "Autenticacion"
+        ],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "email",
+                  "password",
+                  "auth_method",
+                  "rol"
+                ],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "minLength": 8,
+                    "maxLength": 72
+                  },
+                  "auth_method": {
+                    "type": "string",
+                    "enum": [
+                      "password"
+                    ]
+                  },
+                  "display_name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "description": "Obligatorio para entrenador."
+                  },
+                  "rol": {
+                    "type": "string",
+                    "enum": [
+                      "entrenador",
+                      "jugador"
+                    ]
+                  },
+                  "nickname": {
+                    "type": "string",
+                    "description": "Obligatorio para jugador."
+                  },
+                  "nombre_real": {
+                    "type": "string",
+                    "description": "Obligatorio para jugador."
+                  },
+                  "pais": {
+                    "type": "string",
+                    "description": "Obligatorio para jugador."
+                  },
+                  "rol_jugador": {
+                    "type": "string",
+                    "enum": [
+                      "Top",
+                      "Jungle",
+                      "Mid",
+                      "ADC",
+                      "Support"
+                    ],
+                    "description": "Obligatorio para jugador."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Solicitud pendiente creada."
+          },
+          "400": {
+            "description": "Datos inválidos."
+          },
+          "409": {
+            "description": "Ya existe una cuenta, solicitud o nickname duplicado."
+          }
+        }
+      }
+    },
+    "/auth/google/solicitud": {
+      "post": {
+        "summary": "Iniciar solicitud de cuenta con Google",
+        "description": "Endpoint público. Devuelve la URL de autorización de Google; al verificar el correo, se crea una solicitud pendiente de aprobación.",
+        "tags": [
+          "Autenticacion"
+        ],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "rol"
+                ],
+                "properties": {
+                  "rol": {
+                    "type": "string",
+                    "enum": [
+                      "entrenador",
+                      "jugador"
+                    ]
+                  },
+                  "nickname": {
+                    "type": "string",
+                    "description": "Obligatorio para jugador."
+                  },
+                  "nombre_real": {
+                    "type": "string",
+                    "description": "Obligatorio para jugador."
+                  },
+                  "pais": {
+                    "type": "string",
+                    "description": "Obligatorio para jugador."
+                  },
+                  "rol_jugador": {
+                    "type": "string",
+                    "enum": [
+                      "Top",
+                      "Jungle",
+                      "Mid",
+                      "ADC",
+                      "Support"
+                    ],
+                    "description": "Obligatorio para jugador."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "URL de Google para continuar la solicitud."
+          },
+          "400": {
+            "description": "Datos inválidos."
+          }
+        }
+      }
+    },
+    "/usuarios/solicitudes": {
+      "get": {
+        "summary": "Listar solicitudes de acceso",
+        "description": "Disponible solo para admin. Las solicitudes incluyen únicamente datos de perfil, nunca hashes de contraseña.",
+        "tags": [
+          "Cuentas"
+        ],
+        "responses": {
+          "200": {
+            "description": "Solicitudes pendientes ordenadas por fecha.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "integer"
+                      },
+                      "email": {
+                        "type": "string",
+                        "format": "email"
+                      },
+                      "auth_method": {
+                        "type": "string",
+                        "enum": [
+                          "password",
+                          "google"
+                        ]
+                      },
+                      "display_name": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "rol": {
+                        "type": "string",
+                        "enum": [
+                          "entrenador",
+                          "jugador"
+                        ]
+                      },
+                      "nickname": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "nombre_real": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "pais": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "rol_jugador": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "avatar_url": {
+                        "type": "string",
+                        "nullable": true
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Autenticación requerida."
+          },
+          "403": {
+            "description": "Se requiere rol admin."
+          }
+        }
+      }
+    },
+    "/usuarios/solicitudes/{id}/aprobar": {
+      "post": {
+        "summary": "Aprobar solicitud de acceso",
+        "description": "Disponible solo para admin. Crea la cuenta y, para jugadores, su perfil en una transacción; luego elimina la solicitud.",
+        "tags": [
+          "Cuentas"
+        ],
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Solicitud aprobada y cuenta creada."
+          },
+          "400": {
+            "description": "El ID no es válido."
+          },
+          "401": {
+            "description": "Autenticación requerida."
+          },
+          "403": {
+            "description": "Se requiere rol admin o token CSRF válido."
+          },
+          "404": {
+            "description": "Solicitud no encontrada."
+          },
+          "409": {
+            "description": "El correo o nickname ya está en uso."
+          }
+        }
+      }
+    },
+    "/usuarios/solicitudes/{id}": {
+      "delete": {
+        "summary": "Rechazar solicitud de acceso",
+        "description": "Disponible solo para admin. Rechazar elimina la solicitud.",
+        "tags": [
+          "Cuentas"
+        ],
+        "security": [
+          {
+            "cookieAuth": [],
+            "csrfToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Solicitud eliminada."
+          },
+          "401": {
+            "description": "Autenticación requerida."
+          },
+          "403": {
+            "description": "Se requiere rol admin o token CSRF válido."
+          },
+          "404": {
+            "description": "Solicitud no encontrada."
+          }
+        }
+      }
+    },
     "/usuarios": {
       "get": {
         "summary": "Listar cuentas",

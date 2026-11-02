@@ -50,7 +50,7 @@ app.use((error, req, res, next) => {
     const statusCode = error.statusCode || error.status || 500;
 
     if (statusCode === 500) {
-        console.error('Error no controlado:', error);
+        console.error(`Error no controlado en ${req.method} ${req.originalUrl}:`, error);
     }
 
     res.status(statusCode).json({

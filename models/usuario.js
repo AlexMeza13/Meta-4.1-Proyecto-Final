@@ -17,7 +17,23 @@ module.exports = (sequelize, DataTypes) => {
     },
     password_hash: {
       type: DataTypes.STRING(255),
-      allowNull: false
+      allowNull: true
+    },
+    auth_method: {
+      type: DataTypes.STRING(20),
+      allowNull: false,
+      defaultValue: 'password',
+      validate: {
+        isIn: [['password', 'google']]
+      }
+    },
+    display_name: {
+      type: DataTypes.STRING(255),
+      allowNull: true
+    },
+    avatar_url: {
+      type: DataTypes.STRING(2048),
+      allowNull: true
     },
     id_jugador: {
       type: DataTypes.INTEGER,

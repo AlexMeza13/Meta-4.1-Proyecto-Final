@@ -13,12 +13,15 @@ export class UsuarioServiceError extends Error {
     }
 }
 
-const exponerUsuario = ({ id, email, rol, estado, id_jugador, createdAt, updatedAt }, jugador = null) => ({
+const exponerUsuario = ({ id, email, rol, estado, id_jugador, auth_method, display_name, avatar_url, createdAt, updatedAt }, jugador = null) => ({
     id,
     email,
     rol,
     estado,
     id_jugador,
+    auth_method,
+    display_name,
+    avatar_url,
     jugador: jugador ? { id: jugador.id, nickname: jugador.nickname } : null,
     createdAt,
     updatedAt
@@ -26,7 +29,7 @@ const exponerUsuario = ({ id, email, rol, estado, id_jugador, createdAt, updated
 
 export const listarUsuarios = async () => {
     const usuarios = await Usuario.findAll({
-        attributes: ['id', 'email', 'rol', 'estado', 'id_jugador', 'createdAt', 'updatedAt'],
+        attributes: ['id', 'email', 'rol', 'estado', 'id_jugador', 'auth_method', 'display_name', 'avatar_url', 'createdAt', 'updatedAt'],
         order: [['email', 'ASC']]
     });
     const jugadorIds = usuarios.map((usuario) => usuario.id_jugador).filter(Boolean);
@@ -44,17 +47,40 @@ export const listarUsuarios = async () => {
     ));
 };
 
-export const crearUsuario = async ({ email, password, rol = 'entrenador', id_jugador }) => {
+export const crearUsuario = async ({
+    email,
+    password,
+    auth_method = 'password',
+    rol = 'entrenador',
+    id_jugador,
+    display_name
+}) => {
     if (typeof email !== 'string' || email.trim() === '' ||
         !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
         throw new UsuarioServiceError(400, 'Ingresa un correo electronico valido');
     }
-    if (typeof password !== 'string' || password.length < 8 ||
-        Buffer.byteLength(password, 'utf8') > 72) {
+    if (!['password', 'google'].includes(auth_method)) {
+        throw new UsuarioServiceError(400, 'El método de autenticación debe ser password o google');
+    }
+    if (auth_method === 'password' &&
+        (typeof password !== 'string' || password.length < 8 ||
+        Buffer.byteLength(password, 'utf8') > 72)) {
         throw new UsuarioServiceError(400, 'La contraseña debe tener al menos 8 caracteres y no superar 72 bytes');
+    }
+    if (auth_method === 'google' && password !== undefined && password !== '') {
+        throw new UsuarioServiceError(400, 'Las cuentas Google no deben incluir una contraseña local');
     }
     if (!ROLES.includes(rol)) {
         throw new UsuarioServiceError(400, 'El rol debe ser admin, entrenador o jugador');
+    }
+    if (rol !== 'jugador' && auth_method === 'password' &&
+        (typeof display_name !== 'string' || display_name.trim() === '' ||
+        display_name.trim().length > 255)) {
+        throw new UsuarioServiceError(400, 'Ingresa el nombre de la persona (máximo 255 caracteres)');
+    }
+    if (display_name !== undefined && display_name !== null &&
+        (typeof display_name !== 'string' || display_name.trim().length > 255)) {
+        throw new UsuarioServiceError(400, 'El nombre no puede superar 255 caracteres');
     }
     if (rol === 'jugador' &&
         !esIdJugadorValido(id_jugador)) {
@@ -81,10 +107,16 @@ export const crearUsuario = async ({ email, password, rol = 'entrenador', id_jug
             }
         }
 
-        const password_hash = await bcrypt.hash(password, 12);
+        const password_hash = auth_method === 'password'
+            ? await bcrypt.hash(password, 12)
+            : null;
         const usuario = await Usuario.create({
             email: normalizedEmail,
             password_hash,
+            auth_method,
+            display_name: typeof display_name === 'string' && display_name.trim()
+                ? display_name.trim()
+                : null,
             id_jugador: playerId,
             rol,
             estado: 'activo'
@@ -106,7 +138,7 @@ export const actualizarUsuario = async (id, cambios, idAdmin) => {
         throw new UsuarioServiceError(400, 'El ID debe ser un entero positivo');
     }
 
-    const { rol, estado, id_jugador } = cambios;
+    const { rol, estado, id_jugador, display_name } = cambios;
     if (rol !== undefined && !ROLES.includes(rol)) {
         throw new UsuarioServiceError(400, 'El rol debe ser admin, entrenador o jugador');
     }
@@ -117,13 +149,14 @@ export const actualizarUsuario = async (id, cambios, idAdmin) => {
         !esIdJugadorValido(id_jugador)) {
         throw new UsuarioServiceError(400, 'El perfil de jugador seleccionado no es valido');
     }
-    if (rol === undefined && estado === undefined && id_jugador === undefined) {
-        throw new UsuarioServiceError(400, 'Indica el nuevo rol, estado o perfil de jugador');
+    if (display_name !== undefined && display_name !== null &&
+        (typeof display_name !== 'string' || display_name.trim().length > 255)) {
+        throw new UsuarioServiceError(400, 'El nombre no puede superar 255 caracteres');
     }
-    if (usuarioId === Number(idAdmin)) {
-        throw new UsuarioServiceError(409, 'No puedes cambiar tu propio rol o estado');
+    if (rol === undefined && estado === undefined && id_jugador === undefined &&
+        display_name === undefined) {
+        throw new UsuarioServiceError(400, 'Indica el nombre, rol, estado o perfil de jugador');
     }
-
     try {
         return await db.sequelize.transaction(async (transaction) => {
             const usuario = await Usuario.findByPk(usuarioId, { transaction });
@@ -134,6 +167,12 @@ export const actualizarUsuario = async (id, cambios, idAdmin) => {
             const nuevoJugadorId = nuevoRol === 'jugador'
                 ? (id_jugador ?? usuario.id_jugador)
                 : null;
+            if (usuarioId === Number(idAdmin) &&
+                (nuevoRol !== usuario.rol ||
+                nuevoEstado !== usuario.estado ||
+                (nuevoJugadorId ?? null) !== (usuario.id_jugador ?? null))) {
+                throw new UsuarioServiceError(409, 'No puedes cambiar tu propio rol o estado');
+            }
             if (nuevoRol === 'jugador' && !esIdJugadorValido(nuevoJugadorId)) {
                 throw new UsuarioServiceError(400, 'Debes vincular la cuenta con un perfil de jugador');
             }
@@ -167,7 +206,12 @@ export const actualizarUsuario = async (id, cambios, idAdmin) => {
             await usuario.update({
                 rol: nuevoRol,
                 estado: nuevoEstado,
-                id_jugador: nuevoJugadorId
+                id_jugador: nuevoJugadorId,
+                ...(display_name !== undefined && {
+                    display_name: typeof display_name === 'string' && display_name.trim()
+                        ? display_name.trim()
+                        : null
+                })
             }, { transaction });
             const jugador = nuevoJugadorId
                 ? await db.Jugador.findByPk(nuevoJugadorId, { transaction })

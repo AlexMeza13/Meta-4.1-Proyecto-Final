@@ -43,6 +43,10 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
 
 export const api = {
   health: () => request('/health'),
+  createAccountRequest: (accountRequest) =>
+    request('/auth/solicitudes', { method: 'POST', body: accountRequest }),
+  startGoogleAccountRequest: (accountRequest) =>
+    request('/auth/google/solicitud', { method: 'POST', body: accountRequest }),
   async login(email, password) {
     const data = await request('/auth/login', {
       method: 'POST',
@@ -85,6 +89,11 @@ export const api = {
   listUsers: () => request('/usuarios'),
   createUser: (user) => request('/usuarios', { method: 'POST', body: user }),
   updateUser: (id, changes) => request(`/usuarios/${id}`, { method: 'PUT', body: changes }),
+  listAccountRequests: () => request('/usuarios/solicitudes'),
+  approveAccountRequest: (id) =>
+    request(`/usuarios/solicitudes/${id}/aprobar`, { method: 'POST' }),
+  rejectAccountRequest: (id) =>
+    request(`/usuarios/solicitudes/${id}`, { method: 'DELETE' }),
   getRoles: () => request('/roles'),
   getStates: () => request('/estados'),
   getRosterTypes: () => request('/tipos-roster')

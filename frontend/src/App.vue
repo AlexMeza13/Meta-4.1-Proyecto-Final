@@ -1,712 +1,676 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { api } from './services/api.js';
+import { sesionActiva, sesionLista } from './router/index.js';
+import PanelLayout from './components/PanelLayout.vue';
 
-const session = ref(null);
-const loginForm = reactive({ email: '', password: '' });
-const loginError = ref('');
-const busy = ref(false);
-const activeSection = ref('players');
-const players = ref([]);
+const enrutador = useRouter();
+const rutaActual = useRoute();
+const sesion = sesionActiva;
+const formularioInicioSesion = reactive({ email: '', password: '' });
+const errorInicioSesion = ref('');
+const mensajeSolicitudInicioSesion = ref('');
+const procesando = ref(false);
+const jugadores = ref([]);
 const rosters = ref([]);
-const users = ref([]);
-const userEdits = reactive({});
-const selectedRoster = ref(null);
-const rosterPlayers = ref([]);
+const usuarios = ref([]);
+const solicitudesCuenta = ref([]);
+const edicionesUsuario = reactive({});
+const rosterSeleccionado = ref(null);
+const jugadoresRoster = ref([]);
 const roles = ref(['Top', 'Jungle', 'Mid', 'ADC', 'Support']);
-const states = ref(['activo', 'inactivo']);
-const rosterTypes = ref(['Principal', 'Academy']);
-const lineupBusy = ref(false);
-const assignmentForm = reactive({ playerId: 0, role: 'Titular' });
-const notice = ref('');
-const noticeType = ref('success');
-const playerDialog = ref(false);
-const rosterDialog = ref(false);
-const editingPlayerId = ref(null);
-const editingRosterId = ref(null);
-const playerForm = reactive({
+const estados = ref(['activo', 'inactivo']);
+const tiposRoster = ref(['Principal', 'Academy']);
+const procesandoAlineacion = ref(false);
+const formularioAsignacion = reactive({ idJugador: 0, rol: 'Titular' });
+const aviso = ref('');
+const tipoAviso = ref('success');
+const dialogoJugador = ref(false);
+const dialogoRoster = ref(false);
+const dialogoSolicitudCuenta = ref(false);
+const procesandoSolicitudCuenta = ref(false);
+const errorSolicitudCuenta = ref('');
+const formularioSolicitudCuenta = reactive({
+  auth_method: 'password',
+  email: '',
+  password: '',
+  display_name: '',
+  rol: 'entrenador',
+  nickname: '',
+  nombre_real: '',
+  pais: '',
+  rol_jugador: 'Top'
+});
+const idJugadorEditado = ref(null);
+const idRosterEditado = ref(null);
+const formularioJugador = reactive({
   nickname: '',
   nombre_real: '',
   pais: '',
   rol: 'Top',
   estado: 'activo'
 });
-const rosterForm = reactive({
+const formularioRoster = reactive({
   nombre: '',
   tipo: 'Principal',
   temporada: new Date().getFullYear().toString()
 });
-const userForm = reactive({
+const formularioUsuario = reactive({
   email: '',
   password: '',
+  display_name: '',
+  auth_method: 'password',
   rol: 'entrenador',
   id_jugador: 0
 });
 
-const availableRosterPlayers = computed(() => {
-  const assignedIds = new Set(rosterPlayers.value.map((player) => player.id));
-  return players.value.filter((player) => !assignedIds.has(player.id));
+const jugadoresDisponiblesParaRoster = computed(() => {
+  const idsAsignados = new Set(jugadoresRoster.value.map((jugador) => jugador.id));
+  return jugadores.value.filter((jugador) => !idsAsignados.has(jugador.id));
 });
-const unlinkedPlayers = computed(() => players.value.filter((player) =>
-  !users.value.some((user) => user.id_jugador === player.id)
+const jugadoresSinCuenta = computed(() => jugadores.value.filter((jugador) =>
+  !usuarios.value.some((usuario) => usuario.id_jugador === jugador.id)
 ));
-const playerDisplayName = computed(() =>
-  rosterPlayers.value.find((player) => player.id === session.value?.id_jugador)?.nickname ||
-  session.value?.email?.split('@')[0] ||
+const nombreJugador = computed(() =>
+  jugadoresRoster.value.find((jugador) => jugador.id === sesion.value?.id_jugador)?.nickname ||
+  sesion.value?.email?.split('@')[0] ||
   'Jugador'
 );
+const nombreVisibleCuenta = (usuario) => usuario.rol === 'jugador'
+  ? usuario.jugador?.nickname || usuario.email.split('@')[0]
+  : usuario.display_name || usuario.email.split('@')[0];
 
-function showNotice(message, type = 'success') {
-  notice.value = message;
-  noticeType.value = type;
-  window.clearTimeout(showNotice.timeout);
-  showNotice.timeout = window.setTimeout(() => { notice.value = ''; }, 3600);
+function mostrarAviso(mensaje, tipo = 'success') {
+  aviso.value = mensaje;
+  tipoAviso.value = tipo;
+  window.clearTimeout(mostrarAviso.timeout);
+  mostrarAviso.timeout = window.setTimeout(() => { aviso.value = ''; }, 3600);
 }
 
-async function loadPlayers() {
-  players.value = await api.listPlayers();
+async function cargarJugadores() {
+  jugadores.value = await api.listPlayers();
 }
 
-async function loadRosters() {
+async function cargarRosters() {
   rosters.value = await api.listRosters();
 }
 
-async function loadUsers() {
-  users.value = await api.listUsers();
-  for (const id of Object.keys(userEdits)) delete userEdits[id];
-  for (const user of users.value) {
-    userEdits[user.id] = {
-      rol: user.rol,
-      estado: user.estado,
-      id_jugador: user.id_jugador ?? 0
+async function cargarCuentas() {
+  usuarios.value = await api.listUsers();
+  for (const id of Object.keys(edicionesUsuario)) delete edicionesUsuario[id];
+  for (const usuario of usuarios.value) {
+    edicionesUsuario[usuario.id] = {
+      rol: usuario.rol,
+      estado: usuario.estado,
+      id_jugador: usuario.id_jugador ?? 0,
+      display_name: usuario.display_name || ''
     };
   }
 }
 
-async function loadDashboardData() {
-  if (session.value?.rol === 'jugador') {
-    activeSection.value = 'playerGroup';
+async function cargarSolicitudes() {
+  solicitudesCuenta.value = await api.listAccountRequests();
+}
+
+async function cargarDatosPanel() {
+  if (sesion.value?.rol === 'jugador') {
     try {
-      await loadRosters();
+      await cargarRosters();
       if (rosters.value.length) {
-        await fetchRosterDetails(rosters.value[0].id);
+        await cargarDetalleRoster(rosters.value[0].id);
       } else {
-        selectedRoster.value = null;
-        rosterPlayers.value = [];
+        rosterSeleccionado.value = null;
+        jugadoresRoster.value = [];
       }
     } catch (error) {
-      showNotice(error.message, 'error');
+      mostrarAviso(error.message, 'error');
     }
     return;
   }
 
-  const requests = [
-    loadPlayers(),
-    loadRosters(),
+  const promesasCarga = [
+    cargarJugadores(),
+    cargarRosters(),
     api.getRoles(),
     api.getStates(),
     api.getRosterTypes()
   ];
-  if (session.value?.rol === 'admin') requests.push(loadUsers());
+  if (sesion.value?.rol === 'admin') {
+    promesasCarga.push(cargarCuentas(), cargarSolicitudes());
+  }
 
-  const results = await Promise.allSettled(requests);
+  const resultadosCarga = await Promise.allSettled(promesasCarga);
 
-  if (results[2].status === 'fulfilled') roles.value = results[2].value;
-  if (results[3].status === 'fulfilled') states.value = results[3].value;
-  if (results[4].status === 'fulfilled') rosterTypes.value = results[4].value;
+  if (resultadosCarga[2].status === 'fulfilled') roles.value = resultadosCarga[2].value;
+  if (resultadosCarga[3].status === 'fulfilled') estados.value = resultadosCarga[3].value;
+  if (resultadosCarga[4].status === 'fulfilled') tiposRoster.value = resultadosCarga[4].value;
 
-  const failedLoad = results.find((result, index) =>
-    (index < 2 || index === 5) && result.status === 'rejected'
+  const cargaFallida = resultadosCarga.find((resultado, indice) =>
+    (indice < 2 || indice >= 5) && resultado.status === 'rejected'
   );
-  if (failedLoad) showNotice(failedLoad.reason.message, 'error');
+  if (cargaFallida) mostrarAviso(cargaFallida.reason.message, 'error');
 }
 
-async function submitLogin() {
-  loginError.value = '';
-  busy.value = true;
+async function iniciarSesion() {
+  errorInicioSesion.value = '';
+  procesando.value = true;
   try {
-    const data = await api.login(loginForm.email, loginForm.password);
-    session.value = data.usuario;
-    loginForm.password = '';
-    await loadDashboardData();
+    const respuesta = await api.login(formularioInicioSesion.email, formularioInicioSesion.password);
+    sesion.value = respuesta.usuario;
+    formularioInicioSesion.password = '';
+    await cargarDatosPanel();
+    await enrutador.push(sesion.value.rol === 'jugador'
+      ? { name: 'grupo-jugador' }
+      : { name: 'jugadores' });
   } catch (error) {
-    loginError.value = error.message;
+    errorInicioSesion.value = error.message;
   } finally {
-    busy.value = false;
+    procesando.value = false;
   }
 }
 
-async function logout() {
-  busy.value = true;
+function iniciarSesionGoogle() {
+  window.location.assign('/api/v1/auth/google');
+}
+
+function abrirSolicitudCuenta() {
+  errorSolicitudCuenta.value = '';
+  dialogoSolicitudCuenta.value = true;
+}
+
+function cambiarMetodoSolicitud() {
+  errorSolicitudCuenta.value = '';
+  if (formularioSolicitudCuenta.auth_method === 'google') {
+    formularioSolicitudCuenta.email = '';
+    formularioSolicitudCuenta.password = '';
+    formularioSolicitudCuenta.display_name = '';
+  }
+}
+
+async function enviarSolicitudCuenta() {
+  errorSolicitudCuenta.value = '';
+  procesandoSolicitudCuenta.value = true;
+  const datosSolicitud = {
+    rol: formularioSolicitudCuenta.rol,
+    ...(formularioSolicitudCuenta.rol === 'jugador' && {
+      nickname: formularioSolicitudCuenta.nickname,
+      nombre_real: formularioSolicitudCuenta.nombre_real,
+      pais: formularioSolicitudCuenta.pais,
+      rol_jugador: formularioSolicitudCuenta.rol_jugador
+    })
+  };
+
+  try {
+    if (formularioSolicitudCuenta.auth_method === 'google') {
+      const { url } = await api.startGoogleAccountRequest(datosSolicitud);
+      window.location.assign(url);
+      return;
+    }
+
+    await api.createAccountRequest({
+      ...datosSolicitud,
+      auth_method: 'password',
+      email: formularioSolicitudCuenta.email,
+      password: formularioSolicitudCuenta.password,
+      ...(formularioSolicitudCuenta.rol === 'entrenador' && {
+        display_name: formularioSolicitudCuenta.display_name
+      })
+    });
+    dialogoSolicitudCuenta.value = false;
+    mensajeSolicitudInicioSesion.value = 'Tu solicitud fue enviada y está pendiente de aprobación.';
+    Object.assign(formularioSolicitudCuenta, {
+      auth_method: 'password',
+      email: '',
+      password: '',
+      display_name: '',
+      rol: 'entrenador',
+      nickname: '',
+      nombre_real: '',
+      pais: '',
+      rol_jugador: 'Top'
+    });
+  } catch (error) {
+    errorSolicitudCuenta.value = error.message;
+  } finally {
+    procesandoSolicitudCuenta.value = false;
+  }
+}
+
+async function aprobarSolicitudCuenta(solicitud) {
+  try {
+    await api.approveAccountRequest(solicitud.id);
+    await Promise.all([cargarSolicitudes(), cargarCuentas(), cargarJugadores()]);
+    mostrarAviso('Solicitud aprobada y cuenta creada.');
+  } catch (error) {
+    mostrarAviso(error.message, 'error');
+  }
+}
+
+async function rechazarSolicitudCuenta(solicitud) {
+  if (!window.confirm(`¿Rechazar y eliminar la solicitud de ${solicitud.email}?`)) return;
+  try {
+    await api.rejectAccountRequest(solicitud.id);
+    await cargarSolicitudes();
+    mostrarAviso('Solicitud rechazada.');
+  } catch (error) {
+    mostrarAviso(error.message, 'error');
+  }
+}
+
+async function cerrarSesion() {
+  procesando.value = true;
   try {
     await api.logout();
-    session.value = null;
-    selectedRoster.value = null;
-    showNotice('Sesión cerrada correctamente.');
+    sesion.value = null;
+    rosterSeleccionado.value = null;
+    await enrutador.replace({ name: 'login' });
+    mostrarAviso('Sesión cerrada correctamente.');
   } catch (error) {
-    showNotice(error.message, 'error');
+    mostrarAviso(error.message, 'error');
   } finally {
-    busy.value = false;
+    procesando.value = false;
   }
 }
 
-async function changeSection(section) {
-  if (session.value?.rol === 'jugador') return;
-  activeSection.value = section;
-  selectedRoster.value = null;
-  if (section === 'players') await refresh(loadPlayers);
-  else if (section === 'rosters') await refresh(loadRosters);
-  else await refresh(loadUsers);
-}
-
-async function refresh(loader) {
+async function actualizarDatos(funcionCarga) {
   try {
-    await loader();
+    await funcionCarga();
   } catch (error) {
-    showNotice(error.message, 'error');
+    mostrarAviso(error.message, 'error');
   }
 }
 
-function resetPlayerForm() {
-  Object.assign(playerForm, {
+function restablecerFormularioJugador() {
+  Object.assign(formularioJugador, {
     nickname: '',
     nombre_real: '',
     pais: '',
     rol: roles.value[0] || 'Top',
-    estado: states.value[0] || 'activo'
+    estado: estados.value[0] || 'activo'
   });
-  editingPlayerId.value = null;
+  idJugadorEditado.value = null;
 }
 
-function openPlayerDialog(player = null) {
-  resetPlayerForm();
-  if (player) {
-    editingPlayerId.value = player.id;
-    Object.assign(playerForm, {
-      nickname: player.nickname,
-      nombre_real: player.nombre_real,
-      pais: player.pais,
-      rol: player.rol,
-      estado: player.estado
+function abrirDialogoJugador(jugador = null) {
+  restablecerFormularioJugador();
+  if (jugador) {
+    idJugadorEditado.value = jugador.id;
+    Object.assign(formularioJugador, {
+      nickname: jugador.nickname,
+      nombre_real: jugador.nombre_real,
+      pais: jugador.pais,
+      rol: jugador.rol,
+      estado: jugador.estado
     });
   }
-  playerDialog.value = true;
+  dialogoJugador.value = true;
 }
 
-async function savePlayer() {
-  busy.value = true;
+async function guardarJugador() {
+  procesando.value = true;
   try {
-    if (editingPlayerId.value) {
-      await api.updatePlayer(editingPlayerId.value, { ...playerForm });
-      showNotice('Jugador actualizado.');
+    if (idJugadorEditado.value) {
+      await api.updatePlayer(idJugadorEditado.value, { ...formularioJugador });
+      mostrarAviso('Jugador actualizado.');
     } else {
-      await api.createPlayer({ ...playerForm });
-      showNotice('Jugador agregado al roster pool.');
+      await api.createPlayer({ ...formularioJugador });
+      mostrarAviso('Jugador agregado al roster pool.');
     }
-    playerDialog.value = false;
-    await loadPlayers();
-    if (selectedRoster.value) await openRoster(selectedRoster.value.id);
+    dialogoJugador.value = false;
+    await cargarJugadores();
+    if (rosterSeleccionado.value) await abrirRoster(rosterSeleccionado.value.id);
   } catch (error) {
-    showNotice(error.message, 'error');
+    mostrarAviso(error.message, 'error');
   } finally {
-    busy.value = false;
+    procesando.value = false;
   }
 }
 
-async function removePlayer(player) {
-  if (!window.confirm(`¿Eliminar a ${player.nickname}?`)) return;
+async function eliminarJugador(jugador) {
+  if (!window.confirm(`¿Eliminar a ${jugador.nickname}?`)) return;
   try {
-    await api.deletePlayer(player.id);
-    await loadPlayers();
-    if (selectedRoster.value) await openRoster(selectedRoster.value.id);
-    showNotice('Jugador eliminado.');
+    await api.deletePlayer(jugador.id);
+    await cargarJugadores();
+    if (rosterSeleccionado.value) await abrirRoster(rosterSeleccionado.value.id);
+    mostrarAviso('Jugador eliminado.');
   } catch (error) {
-    showNotice(error.message, 'error');
+    mostrarAviso(error.message, 'error');
   }
 }
 
-function openRosterDialog(roster = null) {
-  editingRosterId.value = roster?.id ?? null;
-  Object.assign(rosterForm, roster ? {
+function abrirDialogoRoster(roster = null) {
+  idRosterEditado.value = roster?.id ?? null;
+  Object.assign(formularioRoster, roster ? {
     nombre: roster.nombre,
     tipo: roster.tipo,
     temporada: roster.temporada
   } : {
     nombre: '',
-    tipo: rosterTypes.value[0] || 'Principal',
+    tipo: tiposRoster.value[0] || 'Principal',
     temporada: new Date().getFullYear().toString()
   });
-  rosterDialog.value = true;
+  dialogoRoster.value = true;
 }
 
-async function saveRoster() {
-  busy.value = true;
+async function guardarRoster() {
+  procesando.value = true;
   try {
-    if (editingRosterId.value) {
-      await api.updateRoster(editingRosterId.value, { ...rosterForm });
-      showNotice('Roster actualizado.');
+    if (idRosterEditado.value) {
+      await api.updateRoster(idRosterEditado.value, { ...formularioRoster });
+      mostrarAviso('Roster actualizado.');
     } else {
-      await api.createRoster({ ...rosterForm });
-      showNotice('Roster creado.');
+      await api.createRoster({ ...formularioRoster });
+      mostrarAviso('Roster creado.');
     }
-    rosterDialog.value = false;
-    await loadRosters();
-    if (selectedRoster.value) await openRoster(selectedRoster.value.id);
+    dialogoRoster.value = false;
+    await cargarRosters();
+    if (rosterSeleccionado.value) await abrirRoster(rosterSeleccionado.value.id);
   } catch (error) {
-    showNotice(error.message, 'error');
+    mostrarAviso(error.message, 'error');
   } finally {
-    busy.value = false;
+    procesando.value = false;
   }
 }
 
-async function fetchRosterDetails(id) {
-  const [roster, rosterMembers] = await Promise.all([
+async function cargarDetalleRoster(id) {
+  const [roster, integrantesRoster] = await Promise.all([
     api.getRoster(id),
     api.getRosterPlayers(id)
   ]);
-  selectedRoster.value = roster;
-  rosterPlayers.value = rosterMembers;
-  assignmentForm.playerId = availableRosterPlayers.value[0]?.id ?? 0;
-  assignmentForm.role = 'Titular';
-  activeSection.value = session.value?.rol === 'jugador' ? 'playerGroup' : 'rosters';
+  rosterSeleccionado.value = roster;
+  jugadoresRoster.value = integrantesRoster;
+  formularioAsignacion.idJugador = jugadoresDisponiblesParaRoster.value[0]?.id ?? 0;
+  formularioAsignacion.rol = 'Titular';
 }
 
-async function openRoster(id) {
+async function abrirRoster(id) {
   try {
-    await fetchRosterDetails(id);
+    await cargarDetalleRoster(id);
   } catch (error) {
-    showNotice(error.message, 'error');
+    mostrarAviso(error.message, 'error');
   }
 }
 
-async function assignPlayerToRoster() {
-  if (!selectedRoster.value || !assignmentForm.playerId) return;
+async function asignarJugadorARoster() {
+  if (!rosterSeleccionado.value || !formularioAsignacion.idJugador) return;
 
-  lineupBusy.value = true;
-  const rosterId = selectedRoster.value.id;
+  procesandoAlineacion.value = true;
+  const idRoster = rosterSeleccionado.value.id;
   try {
-    await api.assignPlayerToRoster(rosterId, {
-      id_jugador: Number(assignmentForm.playerId),
-      rol_en_roster: assignmentForm.role
+    await api.assignPlayerToRoster(idRoster, {
+      id_jugador: Number(formularioAsignacion.idJugador),
+      rol_en_roster: formularioAsignacion.rol
     });
-    await fetchRosterDetails(rosterId);
-    showNotice('Jugador asignado al roster.');
+    await cargarDetalleRoster(idRoster);
+    mostrarAviso('Jugador asignado al roster.');
   } catch (error) {
-    showNotice(error.message, 'error');
+    mostrarAviso(error.message, 'error');
   } finally {
-    lineupBusy.value = false;
+    procesandoAlineacion.value = false;
   }
 }
 
-async function changeRosterPlayerRole(player, role) {
-  if (!selectedRoster.value || role === player.rol_en_roster) return;
+async function cambiarRolJugadorEnRoster(jugador, rol) {
+  if (!rosterSeleccionado.value || rol === jugador.rol_en_roster) return;
 
-  lineupBusy.value = true;
-  const rosterId = selectedRoster.value.id;
+  procesandoAlineacion.value = true;
+  const idRoster = rosterSeleccionado.value.id;
   try {
-    await api.updateRosterPlayerRole(rosterId, player.id, role);
-    await fetchRosterDetails(rosterId);
-    showNotice('Rol actualizado.');
+    await api.updateRosterPlayerRole(idRoster, jugador.id, rol);
+    await cargarDetalleRoster(idRoster);
+    mostrarAviso('Rol actualizado.');
   } catch (error) {
-    showNotice(error.message, 'error');
+    mostrarAviso(error.message, 'error');
     try {
-      await fetchRosterDetails(rosterId);
-    } catch (refreshError) {
-      showNotice(`No se pudo actualizar la alineación: ${refreshError.message}`, 'error');
+      await cargarDetalleRoster(idRoster);
+    } catch (errorAlActualizar) {
+      mostrarAviso(`No se pudo actualizar la alineación: ${errorAlActualizar.message}`, 'error');
     }
   } finally {
-    lineupBusy.value = false;
+    procesandoAlineacion.value = false;
   }
 }
 
-async function removePlayerFromRoster(player) {
-  if (!selectedRoster.value ||
-      !window.confirm(`¿Quitar a ${player.nickname} de este roster?`)) return;
+async function quitarJugadorDeRoster(jugador) {
+  if (!rosterSeleccionado.value ||
+      !window.confirm(`¿Quitar a ${jugador.nickname} de este roster?`)) return;
 
-  lineupBusy.value = true;
-  const rosterId = selectedRoster.value.id;
+  procesandoAlineacion.value = true;
+  const idRoster = rosterSeleccionado.value.id;
   try {
-    await api.removePlayerFromRoster(rosterId, player.id);
-    await fetchRosterDetails(rosterId);
-    showNotice('Jugador quitado del roster.');
+    await api.removePlayerFromRoster(idRoster, jugador.id);
+    await cargarDetalleRoster(idRoster);
+    mostrarAviso('Jugador quitado del roster.');
   } catch (error) {
-    showNotice(error.message, 'error');
+    mostrarAviso(error.message, 'error');
   } finally {
-    lineupBusy.value = false;
+    procesandoAlineacion.value = false;
   }
 }
 
-async function removeRoster(roster) {
+async function eliminarRoster(roster) {
   if (!window.confirm(`¿Eliminar el roster “${roster.nombre}”?`)) return;
   try {
     await api.deleteRoster(roster.id);
-    if (selectedRoster.value?.id === roster.id) selectedRoster.value = null;
-    await loadRosters();
-    showNotice('Roster eliminado.');
+    if (rosterSeleccionado.value?.id === roster.id) rosterSeleccionado.value = null;
+    await cargarRosters();
+    mostrarAviso('Roster eliminado.');
   } catch (error) {
-    showNotice(error.message, 'error');
+    mostrarAviso(error.message, 'error');
   }
 }
 
-async function createManagedUser() {
+async function crearCuenta() {
   try {
+    const nuevoUsuario = {
+      email: formularioUsuario.email,
+      auth_method: formularioUsuario.auth_method,
+      rol: formularioUsuario.rol,
+      id_jugador: formularioUsuario.rol === 'jugador' ? Number(formularioUsuario.id_jugador) : undefined
+    };
+    if (formularioUsuario.rol !== 'jugador' && formularioUsuario.auth_method === 'password') {
+      nuevoUsuario.display_name = formularioUsuario.display_name;
+    }
+    if (formularioUsuario.auth_method === 'password') nuevoUsuario.password = formularioUsuario.password;
+
     await api.createUser({
-      ...userForm,
-      id_jugador: userForm.rol === 'jugador' ? Number(userForm.id_jugador) : undefined
+      ...nuevoUsuario
     });
-    userForm.email = '';
-    userForm.password = '';
-    userForm.rol = 'entrenador';
-    userForm.id_jugador = 0;
-    await loadUsers();
-    showNotice('Cuenta creada.');
+    formularioUsuario.email = '';
+    formularioUsuario.password = '';
+    formularioUsuario.display_name = '';
+    formularioUsuario.auth_method = 'password';
+    formularioUsuario.rol = 'entrenador';
+    formularioUsuario.id_jugador = 0;
+    await cargarCuentas();
+    mostrarAviso('Cuenta creada.');
   } catch (error) {
-    showNotice(error.message, 'error');
+    mostrarAviso(error.message, 'error');
   }
 }
 
-function availablePlayersForUser(user) {
-  return players.value.filter((player) =>
-    !users.value.some((otherUser) =>
-      otherUser.id !== user.id && otherUser.id_jugador === player.id
+function cambiarMetodoAutenticacion() {
+  if (formularioUsuario.auth_method === 'google') {
+    formularioUsuario.password = '';
+    formularioUsuario.display_name = '';
+  }
+}
+
+function obtenerJugadoresDisponiblesParaCuenta(usuario) {
+  return jugadores.value.filter((jugador) =>
+    !usuarios.value.some((otroUsuario) =>
+      otroUsuario.id !== usuario.id && otroUsuario.id_jugador === jugador.id
     )
   );
 }
 
-function hasUserChanges(user) {
-  const edit = userEdits[user.id];
-  return edit.rol !== user.rol ||
-    edit.estado !== user.estado ||
-    Number(edit.id_jugador || 0) !== Number(user.id_jugador || 0);
+function hayCambiosEnCuenta(usuario) {
+  const edicion = edicionesUsuario[usuario.id];
+  return edicion.rol !== usuario.rol ||
+    edicion.estado !== usuario.estado ||
+    Number(edicion.id_jugador || 0) !== Number(usuario.id_jugador || 0) ||
+    (usuario.rol !== 'jugador' &&
+      edicion.display_name.trim() !== (usuario.display_name || ''));
 }
 
-async function saveManagedUser(user) {
-  const edit = userEdits[user.id];
-  const changes = {
-    rol: edit.rol,
-    estado: edit.estado,
-    id_jugador: edit.rol === 'jugador' ? Number(edit.id_jugador) : null
+async function guardarCambiosCuenta(usuario) {
+  const edicion = edicionesUsuario[usuario.id];
+  const cambios = {
+    rol: edicion.rol,
+    estado: edicion.estado,
+    id_jugador: edicion.rol === 'jugador' ? Number(edicion.id_jugador) : null
   };
+  if (edicion.rol !== 'jugador') cambios.display_name = edicion.display_name;
   try {
-    await api.updateUser(user.id, changes);
-    await loadUsers();
-    showNotice('Cuenta actualizada.');
+    await api.updateUser(usuario.id, cambios);
+    await cargarCuentas();
+    mostrarAviso('Cuenta actualizada.');
   } catch (error) {
-    showNotice(error.message, 'error');
-    await refresh(loadUsers);
+    mostrarAviso(error.message, 'error');
+    await actualizarDatos(cargarCuentas);
   }
 }
 
+const app = {
+  sesion,
+  formularioInicioSesion,
+  errorInicioSesion,
+  mensajeSolicitudInicioSesion,
+  procesando,
+  jugadores,
+  rosters,
+  usuarios,
+  solicitudesCuenta,
+  edicionesUsuario,
+  rosterSeleccionado,
+  jugadoresRoster,
+  roles,
+  estados,
+  tiposRoster,
+  procesandoAlineacion,
+  formularioAsignacion,
+  aviso,
+  tipoAviso,
+  dialogoJugador,
+  dialogoRoster,
+  dialogoSolicitudCuenta,
+  procesandoSolicitudCuenta,
+  errorSolicitudCuenta,
+  formularioSolicitudCuenta,
+  idJugadorEditado,
+  idRosterEditado,
+  formularioJugador,
+  formularioRoster,
+  formularioUsuario,
+  jugadoresDisponiblesParaRoster,
+  jugadoresSinCuenta,
+  nombreJugador,
+  nombreVisibleCuenta,
+  mostrarAviso,
+  cargarJugadores,
+  cargarRosters,
+  cargarCuentas,
+  cargarSolicitudes,
+  iniciarSesion,
+  iniciarSesionGoogle,
+  abrirSolicitudCuenta,
+  cambiarMetodoSolicitud,
+  enviarSolicitudCuenta,
+  aprobarSolicitudCuenta,
+  rechazarSolicitudCuenta,
+  cerrarSesion,
+  actualizarDatos,
+  restablecerFormularioJugador,
+  abrirDialogoJugador,
+  guardarJugador,
+  eliminarJugador,
+  abrirDialogoRoster,
+  guardarRoster,
+  cargarDetalleRoster,
+  abrirRoster,
+  asignarJugadorARoster,
+  cambiarRolJugadorEnRoster,
+  quitarJugadorDeRoster,
+  eliminarRoster,
+  crearCuenta,
+  cambiarMetodoAutenticacion,
+  obtenerJugadoresDisponiblesParaCuenta,
+  hayCambiosEnCuenta,
+  guardarCambiosCuenta
+};
+
 onMounted(async () => {
-  try {
-    const data = await api.verifySession();
-    session.value = data.usuario;
-    await loadDashboardData();
-  } catch (error) {
-    if (!error.message.includes('(401)') && !error.message.includes('Autenticacion requerida')) {
-      showNotice(error.message, 'error');
+  const estadoGoogle = new URLSearchParams(window.location.search).get('google');
+  const estadoSolicitud = new URLSearchParams(window.location.search).get('request');
+  if (estadoGoogle || estadoSolicitud) {
+    window.history.replaceState({}, document.title, window.location.pathname);
+  }
+
+  if (estadoSolicitud) {
+    const mensajesSolicitud = {
+      success: 'Tu solicitud fue enviada y está pendiente de aprobación.',
+      cancelled: 'Cancelaste la solicitud con Google.',
+      already_exists: 'Ya existe una cuenta o una solicitud con ese correo.',
+      invalid_response: 'Google no devolvió una respuesta válida. Intenta de nuevo.',
+      invalid_state: 'No se pudo validar la solicitud de Google. Intenta de nuevo.',
+      unverified_email: 'Google no pudo verificar tu correo y nombre.',
+      failed: 'No se pudo enviar la solicitud con Google. Intenta de nuevo.'
+    };
+    if (estadoSolicitud === 'success') {
+      mensajeSolicitudInicioSesion.value = mensajesSolicitud.success;
+    } else {
+      errorInicioSesion.value = mensajesSolicitud[estadoSolicitud] || 'No se pudo enviar la solicitud.';
     }
+  }
+
+  try {
+    const respuesta = await api.verifySession();
+    sesion.value = respuesta.usuario;
+    await cargarDatosPanel();
+    if (estadoGoogle === 'success') {
+      mostrarAviso('Inicio de sesión con Google exitoso.');
+    }
+  } catch (error) {
+    if (estadoGoogle && estadoGoogle !== 'success') {
+      const erroresGoogle = {
+        cancelled: 'Cancelaste el inicio de sesión con Google.',
+        invalid_response: 'Google no devolvió una respuesta válida. Intenta de nuevo.',
+        invalid_state: 'No se pudo validar la sesión de Google. Intenta de nuevo.',
+        unverified_email: 'Google no pudo verificar tu correo electrónico.',
+        google_not_enabled: 'Esta cuenta está configurada para iniciar sesión con correo y contraseña.',
+        account_not_available: 'No hay una cuenta activa de EA Sports asociada a ese correo.',
+        failed: 'No se pudo completar el inicio de sesión con Google. Intenta de nuevo.'
+      };
+      errorInicioSesion.value = erroresGoogle[estadoGoogle] || 'No se pudo iniciar sesión con Google.';
+      return;
+    }
+    if (estadoGoogle === 'success') {
+      errorInicioSesion.value = 'Google autenticó tu cuenta, pero no se pudo verificar la sesión de EA Sports.';
+      return;
+    }
+    if (!error.message.includes('(401)') && !error.message.includes('Autenticacion requerida')) {
+      mostrarAviso(error.message, 'error');
+    }
+  } finally {
+    if (sesion.value && !rutaActual.meta.notFound) {
+      await enrutador.replace(sesion.value.rol === 'jugador'
+        ? { name: 'grupo-jugador' }
+        : { name: 'jugadores' });
+    } else if (rutaActual.name !== 'login' && !rutaActual.meta.notFound) {
+      await enrutador.replace({ name: 'login' });
+    }
+    sesionLista.value = true;
   }
 });
 </script>
 
 <template>
-  <main v-if="!session" class="login-page">
-    <form class="login-card" @submit.prevent="submitLogin">
-      <h1>Inicia sesión</h1>
-      <p class="login-intro">Ingresa a tu cuenta para gestionar jugadores y rosters.</p>
-      <label for="email">Correo electrónico</label>
-      <input id="email" v-model="loginForm.email" type="email" autocomplete="username" placeholder="nombre@equipo.com" required />
-      <label for="password">Contraseña</label>
-      <input id="password" v-model="loginForm.password" type="password" autocomplete="current-password" placeholder="Tu contraseña" required />
-      <p v-if="loginError" class="form-error" role="alert">{{ loginError }}</p>
-      <button class="primary-button login-button" type="submit" :disabled="busy">
-        {{ busy ? 'Iniciando sesión…' : 'Iniciar sesión' }}
-      </button>
-    </form>
-  </main>
-
-  <main v-else class="workspace">
-    <aside class="app-sidebar">
-      <div class="sidebar-heading">GESTIÓN DEL EQUIPO</div>
-      <nav v-if="session.rol !== 'jugador'" class="sidebar-nav" aria-label="Secciones">
-        <button class="sidebar-item" :class="{ active: activeSection === 'players' }" @click="changeSection('players')">
-          <span class="sidebar-icon">J</span><span>Jugadores</span>
-        </button>
-        <button class="sidebar-item" :class="{ active: activeSection === 'rosters' }" @click="changeSection('rosters')">
-          <span class="sidebar-icon">R</span><span>Rosters</span>
-        </button>
-        <button v-if="session.rol === 'admin'" class="sidebar-item" :class="{ active: activeSection === 'users' }" @click="changeSection('users')">
-          <span class="sidebar-icon">C</span><span>Cuentas</span>
-        </button>
-      </nav>
-      <nav v-else class="sidebar-nav" aria-label="Secciones">
-        <button class="sidebar-item active" type="button">
-          <span class="sidebar-icon">G</span><span>Mi grupo</span>
-        </button>
-      </nav>
-      <div class="sidebar-account">
-        <span class="profile-avatar">{{ session.email?.slice(0, 1).toUpperCase() }}</span>
-        <span class="sidebar-email">{{ session.email }}</span>
-        <button class="sidebar-logout" :disabled="busy" @click="logout">Cerrar sesión</button>
-      </div>
-    </aside>
-
-    <div class="workspace-main">
-      <section class="main-panel">
-        <div class="content-area">
-        <div v-if="notice" class="toast" :class="`toast-${noticeType}`" role="status">{{ notice }}</div>
-
-        <template v-if="activeSection === 'playerGroup'">
-          <div class="player-page-heading">
-            <h1>Bienvenido, {{ playerDisplayName }}</h1>
-            <p>Esta es la organización de tu equipo.</p>
-          </div>
-
-          <section v-if="rosters.length" class="data-card player-group-card">
-            <nav v-if="rosters.length > 1" class="player-roster-tabs" aria-label="Seleccionar grupo">
-              <button
-                v-for="(roster, index) in rosters"
-                :key="roster.id"
-                type="button"
-                class="player-roster-tab"
-                :class="{ active: selectedRoster?.id === roster.id }"
-                :aria-pressed="selectedRoster?.id === roster.id"
-                @click="openRoster(roster.id)"
-              >
-                <span class="roster-symbol">R{{ index + 1 }}</span>
-                <span class="player-roster-tab-label">
-                  <strong>{{ roster.nombre }}</strong>
-                  <small>{{ roster.tipo }} · Temporada {{ roster.temporada }}</small>
-                </span>
-              </button>
-            </nav>
-
-            <template v-if="selectedRoster">
-              <div class="player-group-heading">
-                <h2>{{ selectedRoster.nombre }}</h2>
-                <p>{{ selectedRoster.tipo }} · Temporada {{ selectedRoster.temporada }}</p>
-              </div>
-              <div v-if="rosterPlayers.length" class="table-wrap">
-                <table class="player-lineup-table">
-                  <thead>
-                    <tr>
-                      <th>JUGADOR</th>
-                      <th>POSICIÓN</th>
-                      <th>ASIGNACIÓN</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="player in rosterPlayers" :key="player.id">
-                      <td>
-                        <div class="player-cell">
-                          <span class="player-avatar">{{ player.nickname?.slice(0, 2).toUpperCase() }}</span>
-                          <strong>{{ player.nickname }}</strong>
-                        </div>
-                      </td>
-                      <td><span class="role-pill">{{ player.rol }}</span></td>
-                      <td><span class="lineup-status">{{ player.rol_en_roster }}</span></td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div v-else class="empty-lineup player-empty-lineup">Este grupo aún no tiene jugadores asignados.</div>
-            </template>
-          </section>
-
-          <section v-else class="data-card player-empty-card">
-            <div class="empty-state">
-              <strong>Aún no tienes un grupo asignado</strong>
-              <p>Pide al administrador que vincule tu perfil a un roster.</p>
-            </div>
-          </section>
-        </template>
-
-        <template v-else-if="activeSection === 'players'">
-          <div v-if="session.rol === 'admin'" class="page-heading player-admin-heading">
-            <button class="primary-button" @click="openPlayerDialog()">＋ Añadir jugador</button>
-          </div>
-          <div v-else class="page-heading player-directory-heading">
-            <div>
-              <h1>Jugadores</h1>
-              <p class="page-subtitle">Perfiles disponibles para integrar a tus rosters.</p>
-            </div>
-          </div>
-          <section class="data-card">
-            <div class="section-heading">
-              <div>
-                <h2>{{ session.rol === 'admin' ? 'Todos los jugadores' : 'Perfiles disponibles' }}</h2>
-                <p>{{ session.rol === 'admin' ? 'Perfiles del equipo.' : 'Selecciona uno al administrar la alineación de un roster.' }}</p>
-              </div>
-            </div>
-            <div v-if="players.length" class="table-wrap">
-              <table><thead><tr><th>JUGADOR</th><th>ROL</th><th>PAÍS</th><th>ESTADO</th><th v-if="session.rol === 'admin'"></th></tr></thead>
-                <tbody><tr v-for="player in players" :key="player.id">
-                  <td><div class="player-cell"><span class="player-avatar">{{ player.nickname?.slice(0, 2).toUpperCase() }}</span><span><strong>{{ player.nickname }}</strong><small>{{ player.nombre_real }}</small></span></div></td>
-                  <td><span class="role-pill">{{ player.rol }}</span></td><td>{{ player.pais }}</td>
-                  <td><span class="state-pill" :class="player.estado === 'activo' ? 'state-active' : 'state-inactive'"><i></i>{{ player.estado }}</span></td>
-                  <td v-if="session.rol === 'admin'">
-                    <div class="row-actions">
-                      <button class="row-action-button" aria-label="Editar jugador" title="Editar" @click="openPlayerDialog(player)">Editar</button>
-                      <button class="row-action-button row-action-danger" aria-label="Eliminar jugador" title="Eliminar" @click="removePlayer(player)">Eliminar</button>
-                    </div>
-                  </td>
-                </tr></tbody>
-              </table>
-            </div>
-            <div v-else class="empty-state">
-              <strong>Aún no hay jugadores</strong>
-              <p>{{ session.rol === 'admin' ? 'Agrega el primer perfil para comenzar.' : 'Pide al administrador que registre los perfiles de jugadores.' }}</p>
-              <button v-if="session.rol === 'admin'" class="text-button" @click="openPlayerDialog()">＋ Añadir jugador</button>
-            </div>
-          </section>
-        </template>
-
-        <template v-else-if="activeSection === 'rosters'">
-          <div class="page-heading">
-            <div><h1>Rosters</h1></div>
-            <button class="primary-button" @click="openRosterDialog()">＋ Crear roster</button>
-          </div>
-          <div class="roster-layout">
-            <section class="data-card roster-list-card">
-              <div class="section-heading">
-                <div><h2>Equipos</h2><p>Rosters activos y en preparación.</p></div>
-              </div>
-              <div v-if="rosters.length" class="table-wrap roster-table-wrap">
-                <table class="roster-table">
-                  <thead>
-                    <tr><th>ROSTER</th><th>TIPO</th><th>TEMPORADA</th><th class="roster-actions-heading">ACCIONES</th></tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(roster, index) in rosters" :key="roster.id" :class="{ selected: selectedRoster?.id === roster.id }" @click="openRoster(roster.id)">
-                      <td>
-                        <button type="button" class="roster-name-button" @click.stop="openRoster(roster.id)">
-                          <span class="roster-symbol">R{{ index + 1 }}</span>
-                          <strong>{{ roster.nombre }}</strong>
-                        </button>
-                      </td>
-                      <td>{{ roster.tipo }}</td>
-                      <td>{{ roster.temporada }}</td>
-                      <td>
-                        <div class="row-actions roster-row-actions">
-                          <button class="row-action-button" :aria-label="`Editar roster ${roster.nombre}`" @click.stop="openRosterDialog(roster)">Editar</button>
-                          <button class="row-action-button row-action-danger" :aria-label="`Eliminar roster ${roster.nombre}`" @click.stop="removeRoster(roster)">Eliminar</button>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-              <div v-else class="empty-state"><strong>Aún no hay rosters</strong><p>Crea un roster para organizar el equipo.</p><button class="text-button" @click="openRosterDialog()">＋ Crear roster</button></div>
-            </section>
-            <section class="data-card roster-detail-card">
-              <template v-if="selectedRoster">
-                <div class="section-heading"><div><h2>{{ selectedRoster.nombre }}</h2><p>{{ selectedRoster.tipo }} · Temporada {{ selectedRoster.temporada }}</p></div><button class="close-detail" aria-label="Cerrar detalle" @click="selectedRoster = null">×</button></div>
-                <div class="lineup-label"><span>ALINEACIÓN</span><span>{{ rosterPlayers.length }} JUGADORES</span></div>
-                <div v-if="rosterPlayers.length" class="lineup-list">
-                  <div v-for="player in rosterPlayers" :key="player.id" class="lineup-row">
-                    <span class="lineup-position">{{ player.rol }}</span>
-                    <strong>{{ player.nickname }}</strong>
-                    <select
-                      class="lineup-role-select"
-                      :value="player.rol_en_roster"
-                      :disabled="lineupBusy"
-                      :aria-label="`Rol de ${player.nickname} en el roster`"
-                      @change="changeRosterPlayerRole(player, $event.target.value)"
-                    >
-                      <option value="Titular">Titular</option>
-                      <option value="Suplente">Suplente</option>
-                    </select>
-                    <button
-                      type="button"
-                      class="lineup-remove"
-                      :disabled="lineupBusy"
-                      :aria-label="`Quitar a ${player.nickname} del roster`"
-                      @click="removePlayerFromRoster(player)"
-                    >Quitar</button>
-                  </div>
-                </div>
-                <div v-else class="empty-lineup">Este roster aún no tiene jugadores asignados.</div>
-                <form class="assignment-form" @submit.prevent="assignPlayerToRoster">
-                  <label class="assignment-field" for="roster-player">
-                    <span>Añadir jugador</span>
-                    <select id="roster-player" v-model.number="assignmentForm.playerId" :disabled="!availableRosterPlayers.length || lineupBusy">
-                      <option :value="0" disabled>Selecciona un jugador</option>
-                      <option v-for="player in availableRosterPlayers" :key="player.id" :value="player.id">
-                        {{ player.nickname }} · {{ player.rol }}
-                      </option>
-                    </select>
-                  </label>
-                  <label class="assignment-field" for="roster-player-role">
-                    <span>Asignación</span>
-                    <select id="roster-player-role" v-model="assignmentForm.role" :disabled="lineupBusy">
-                      <option value="Titular">Titular</option>
-                      <option value="Suplente">Suplente</option>
-                    </select>
-                  </label>
-                  <button class="primary-button assignment-button" :disabled="!availableRosterPlayers.length || lineupBusy">
-                    {{ lineupBusy ? 'Guardando…' : 'Añadir al roster' }}
-                  </button>
-                  <p v-if="!availableRosterPlayers.length" class="assignment-help">Todos los jugadores disponibles ya están asignados.</p>
-                </form>
-              </template>
-              <div v-else class="detail-placeholder"><strong>Selecciona un roster</strong><p>Consulta aquí su alineación.</p></div>
-            </section>
-          </div>
-        </template>
-
-        <template v-else-if="activeSection === 'users' && session.rol === 'admin'">
-          <section class="data-card account-create-card">
-            <div class="section-heading"><div><h2>Crear cuenta</h2><p>Las contraseñas deben tener al menos 8 caracteres.</p></div></div>
-            <form class="account-create-form" @submit.prevent="createManagedUser">
-              <label>Correo electrónico<input v-model.trim="userForm.email" type="email" autocomplete="off" required maxlength="254" /></label>
-            <label>Contraseña inicial<input v-model="userForm.password" type="password" autocomplete="new-password" required minlength="8" maxlength="72" /></label>
-            <label>Rol<select v-model="userForm.rol" @change="userForm.id_jugador = 0"><option value="entrenador">Entrenador</option><option value="jugador">Jugador</option><option value="admin">Admin</option></select></label>
-            <label v-if="userForm.rol === 'jugador'">Perfil de jugador<select v-model.number="userForm.id_jugador" required><option :value="0" disabled>Selecciona un perfil</option><option v-for="player in unlinkedPlayers" :key="player.id" :value="player.id">{{ player.nickname }}</option></select></label>
-            <p v-if="userForm.rol === 'jugador' && !unlinkedPlayers.length" class="account-help">Todos los perfiles ya tienen cuenta vinculada.</p>
-            <button class="primary-button" :disabled="userForm.rol === 'jugador' && (!unlinkedPlayers.length || !userForm.id_jugador)">Crear cuenta</button>
-            </form>
-          </section>
-          <section class="data-card account-list-card">
-            <div class="section-heading"><div><h2>Cuentas registradas</h2><p>{{ users.length }} cuentas</p></div></div>
-            <div v-if="users.length" class="table-wrap">
-              <table><thead><tr><th>CUENTA</th><th>ROL</th><th>PERFIL</th><th>ESTADO</th><th>CREADA</th><th></th></tr></thead>
-                <tbody><tr v-for="user in users" :key="user.id">
-                  <td><div class="user-cell"><span class="profile-avatar">{{ user.email.slice(0, 1).toUpperCase() }}</span><strong>{{ user.email }}</strong><span v-if="user.id === session.id" class="self-label">Tú</span></div></td>
-                  <td><select v-model="userEdits[user.id].rol" class="account-select" :disabled="user.id === session.id" :aria-label="`Rol de ${user.email}`"><option value="admin">Admin</option><option value="entrenador">Entrenador</option><option value="jugador">Jugador</option></select></td>
-                  <td><select v-model.number="userEdits[user.id].id_jugador" class="account-select" :disabled="userEdits[user.id].rol !== 'jugador' || user.id === session.id" :aria-label="`Perfil vinculado a ${user.email}`"><option :value="0" disabled>Selecciona perfil</option><option v-for="player in availablePlayersForUser(user)" :key="player.id" :value="player.id">{{ player.nickname }}</option></select></td>
-                  <td><select v-model="userEdits[user.id].estado" class="account-select" :disabled="user.id === session.id" :aria-label="`Estado de ${user.email}`"><option value="activo">Activo</option><option value="inactivo">Inactivo</option></select></td>
-                  <td>{{ new Date(user.createdAt).toLocaleDateString() }}</td>
-                  <td><button class="row-action-button" :disabled="user.id === session.id || !hasUserChanges(user)" @click="saveManagedUser(user)">Guardar</button></td>
-                </tr></tbody>
-              </table>
-            </div>
-            <div v-else class="empty-state"><strong>No hay cuentas registradas</strong></div>
-          </section>
-        </template>
-        </div>
-        <footer class="workspace-footer"><span>Gestión de equipos</span></footer>
-      </section>
-    </div>
-
-    <div v-if="playerDialog" class="modal-backdrop" @click.self="playerDialog = false">
-      <form class="dialog" @submit.prevent="savePlayer">
-        <div class="dialog-heading"><div><h2>{{ editingPlayerId ? 'Editar jugador' : 'Nuevo jugador' }}</h2></div><button type="button" class="close-detail" aria-label="Cerrar" @click="playerDialog = false">×</button></div>
-        <label>Nickname<input v-model.trim="playerForm.nickname" required maxlength="255" /></label>
-        <label>Nombre real<input v-model.trim="playerForm.nombre_real" required maxlength="255" /></label>
-        <div class="form-row"><label>País<input v-model.trim="playerForm.pais" required maxlength="255" placeholder="MX" /></label><label>Rol<select v-model="playerForm.rol"><option v-for="role in roles" :key="role">{{ role }}</option></select></label></div>
-        <label>Estado<select v-model="playerForm.estado"><option v-for="state in states" :key="state">{{ state }}</option></select></label>
-        <div class="dialog-actions"><button type="button" class="secondary-button" @click="playerDialog = false">Cancelar</button><button class="primary-button" :disabled="busy">{{ busy ? 'Guardando…' : 'Guardar jugador' }}</button></div>
-      </form>
-    </div>
-
-    <div v-if="rosterDialog" class="modal-backdrop" @click.self="rosterDialog = false">
-      <form class="dialog" @submit.prevent="saveRoster">
-        <div class="dialog-heading"><div><h2>{{ editingRosterId ? 'Editar roster' : 'Nuevo roster' }}</h2></div><button type="button" class="close-detail" aria-label="Cerrar" @click="rosterDialog = false">×</button></div>
-        <label>Nombre del roster<input v-model.trim="rosterForm.nombre" required maxlength="255" placeholder="EA Main Squad" /></label>
-        <div class="form-row"><label>Tipo<select v-model="rosterForm.tipo"><option v-for="type in rosterTypes" :key="type">{{ type }}</option></select></label><label>Temporada<input v-model.trim="rosterForm.temporada" required maxlength="255" /></label></div>
-        <div class="dialog-actions"><button type="button" class="secondary-button" @click="rosterDialog = false">Cancelar</button><button class="primary-button" :disabled="busy">{{ busy ? 'Guardando…' : 'Guardar roster' }}</button></div>
-      </form>
-    </div>
-  </main>
+  <RouterView v-if="sesionLista" v-slot="{ Component, route }">
+    <PanelLayout v-if="route.meta.panel" :app="app">
+      <component :is="Component" :app="app" />
+    </PanelLayout>
+    <component :is="Component" v-else :app="app" />
+  </RouterView>
+  <div v-else class="app-loading" role="status">Cargando...</div>
 </template>

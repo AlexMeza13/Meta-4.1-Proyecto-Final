@@ -110,11 +110,18 @@ export const asignarJugador = async (idRoster, datos) => {
         }
     }
 
-    return Roster_Jugador.create({
-        id_roster: idRoster,
-        id_jugador,
-        rol_en_roster
-    });
+    try {
+        return await Roster_Jugador.create({
+            id_roster: idRoster,
+            id_jugador,
+            rol_en_roster
+        });
+    } catch (error) {
+        if (error instanceof db.Sequelize.UniqueConstraintError) {
+            throw new RosterServiceError(409, 'El jugador ya está asignado a este roster');
+        }
+        throw error;
+    }
 };
 
 export const quitarJugador = async (idRoster, idJugador) => {

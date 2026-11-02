@@ -43,17 +43,24 @@ Para ejecutar este proyecto de manera local, necesitas tener instalado:
    npm run db:migrate
    ```
 
+   Para cargar equipos y jugadores de League of Legends de Worlds 2024 (T1, G2 Esports y Gen.G), ejecuta:
+   ```powershell
+   npm run db:seed:demo
+   ```
+   El seeder agrega 15 perfiles/cuentas de jugador y asigna cada roster a un entrenador activo. Si no hay tres entrenadores activos, crea los que falten.
+
+   Cuentas demo de jugadores: `Jugador1@gmail.com` a `Jugador15@gmail.com`; la contraseña corresponde al número (por ejemplo, `Jugador1@gmail.com` / `Jugador1`). La cuenta existente `Jugador1@gmail.com`, vinculada a Faker, tendrá la contraseña `Jugador1` tras cargar el seeder. Si se crean entrenadores demo, sus credenciales se muestran en la salida del comando y usan el mismo patrón (`EntrenadorN@gmail.com` / `EntrenadorN`). Son credenciales públicas de demostración: no las uses en producción.
+
 5. **Configurar la autenticación:**
    Crea un archivo `.env` en la raíz del proyecto con una clave aleatoria de al menos 32 caracteres y el origen del frontend:
    ```env
    JWT_SECRET=
    CLIENT_URL=http://localhost:5173
+   GOOGLE_CLIENT_ID=
+   GOOGLE_CLIENT_SECRET=
+   GOOGLE_REDIRECT_URI=http://localhost:3000/api/v1/auth/google/callback
    ADMIN_EMAIL=
    ADMIN_PASSWORD=
-   ```
-   En PowerShell puedes generar una clave con:
-   ```powershell
-   node -e "console.log(require('node:crypto').randomBytes(48).toString('hex'))"
    ```
 
 6. **Crear el primer administrador:**
@@ -61,6 +68,12 @@ Para ejecutar este proyecto de manera local, necesitas tener instalado:
    ```powershell
    npm run user:create-admin
    ```
+
+   Si ya existe exactamente un admin y cambiaste `ADMIN_EMAIL` o `ADMIN_PASSWORD` en `.env`, actualiza sus credenciales sin borrar la base de datos:
+   ```powershell
+   npm run user:update-admin
+   ```
+   Este comando conserva el resto de los datos. Se detiene si hay varios admins o si el nuevo correo ya pertenece a otra cuenta.
 
 ## Ejecución del Servidor
 
@@ -83,6 +96,10 @@ npm run dev
 ```
 
 Abre http://localhost:5173 e inicia sesión con una cuenta existente.
+
+Desde la pantalla de inicio de sesión, una persona puede seleccionar **Crear Cuenta**, elegir una cuenta de entrenador o jugador y usar correo/contraseña o Google. Las solicitudes no crean acceso inmediatamente: un administrador debe abrir **Solicitudes** y aprobarlas o rechazarlas. Al aprobar una solicitud de jugador también se crea su perfil; al rechazarla, se elimina.
+
+La tabla de solicitudes requiere aplicar las migraciones pendientes con `npm run db:migrate` desde la carpeta raíz `eaSports`.
 
 
 ## Probar la API con REST Client

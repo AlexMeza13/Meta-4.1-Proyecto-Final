@@ -30,11 +30,18 @@ export const verificarToken = async (req, res, next) => {
         return res.status(401).json({ error: 'Sesion invalida o expirada' });
     }
 
+    const jugador = usuario.rol === 'jugador' && usuario.id_jugador
+        ? await db.Jugador.findByPk(usuario.id_jugador, { attributes: ['nickname'] })
+        : null;
     req.usuario = {
         id: usuario.id,
         email: usuario.email,
         rol: usuario.rol,
-        id_jugador: usuario.id_jugador
+        id_jugador: usuario.id_jugador,
+        avatar_url: usuario.avatar_url,
+        display_name: usuario.rol === 'jugador'
+            ? jugador?.nickname
+            : usuario.display_name
     };
     req.authCsrfToken = payload.csrfToken;
     next();
