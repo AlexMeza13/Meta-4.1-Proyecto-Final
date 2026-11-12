@@ -9,19 +9,22 @@ class JugadorServiceError extends Error {
     }
 }
 
+const errorNicknameDuplicado = (nickname) =>
+    new JugadorServiceError(409, `El nickname "${nickname}" ya está registrado. Elige otro.`);
+
 export const crearJugador = async (datos) => {
     const { nickname, nombre_real, pais, rol, estado } = datos;
     const jugadorExistente = await Jugador.findOne({ where: { nickname } });
 
     if (jugadorExistente) {
-        throw new JugadorServiceError(409, 'El nickname ya esta en uso');
+        throw errorNicknameDuplicado(nickname);
     }
 
     try {
         return await Jugador.create({ nickname, nombre_real, pais, rol, estado });
     } catch (error) {
         if (error instanceof db.Sequelize.UniqueConstraintError) {
-            throw new JugadorServiceError(409, 'El nickname ya esta en uso');
+            throw errorNicknameDuplicado(nickname);
         }
         throw error;
     }
@@ -29,8 +32,21 @@ export const crearJugador = async (datos) => {
 
 export const listarJugadores = () => Jugador.findAll();
 
+export const listarJugadoresPublicos = () => Jugador.findAll({
+    attributes: ['id', 'nickname', 'pais', 'rol']
+});
+
 export const obtenerJugador = async (id) => {
     const jugador = await Jugador.findByPk(id);
+    if (!jugador) throw new JugadorServiceError(404, 'Jugador no encontrado');
+
+    return jugador;
+};
+
+export const obtenerJugadorPublico = async (id) => {
+    const jugador = await Jugador.findByPk(id, {
+        attributes: ['id', 'nickname', 'pais', 'rol']
+    });
     if (!jugador) throw new JugadorServiceError(404, 'Jugador no encontrado');
 
     return jugador;
@@ -43,7 +59,7 @@ export const actualizarJugador = async (id, datos) => {
     if (nickname !== undefined) {
         const jugadorConNickname = await Jugador.findOne({ where: { nickname } });
         if (jugadorConNickname && jugadorConNickname.id !== jugador.id) {
-            throw new JugadorServiceError(409, 'El nickname ya esta en uso');
+            throw errorNicknameDuplicado(nickname);
         }
     }
 
@@ -51,7 +67,7 @@ export const actualizarJugador = async (id, datos) => {
         await jugador.update({ nickname, nombre_real, pais, rol, estado });
     } catch (error) {
         if (error instanceof db.Sequelize.UniqueConstraintError) {
-            throw new JugadorServiceError(409, 'El nickname ya esta en uso');
+            throw errorNicknameDuplicado(nickname);
         }
         throw error;
     }

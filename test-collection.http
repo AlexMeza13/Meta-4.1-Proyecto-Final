@@ -98,7 +98,7 @@ X-CSRF-Token: {{csrfToken}}
   "estado": "activo"
 }
 
-### Crear nickname duplicado Id de Codigo esperado: 409
+### Crear nickname duplicado Id de Codigo esperado: 409 con el nickname que ya está registrado
 # @name nicknameDuplicado
 POST {{baseUrl}}/jugadores
 Content-Type: application/json

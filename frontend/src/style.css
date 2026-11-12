@@ -17,7 +17,8 @@
 }
 
 * { box-sizing: border-box; }
-body { min-width: 320px; min-height: 100vh; margin: 0; background: #071522; }
+html { overflow-x: auto; }
+body { min-width: 1024px; min-height: 100vh; margin: 0; background: #071522; }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: wait; opacity: .65; }
@@ -79,6 +80,12 @@ input::placeholder { color: #718391; }
 .section-heading h2 { margin: 0; color: #eee8da; font-size: 15px; font-weight: 600; }
 .section-heading p { margin: 4px 0 0; color: var(--muted); font-size: 12px; }
 .section-heading { margin-bottom: 0; }
+.list-filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.list-filters label { display: grid; min-width: 130px; gap: 6px; color: #c1cbd0; font-size: 11px; }
+.list-filters .list-filter-search { flex: 1 1 220px; }
+.list-filters input, .list-filters select { width: 100%; height: 36px; padding: 0 9px; border: 1px solid #345165; border-radius: 4px; outline: none; background: #091a28; color: #e8e4d8; font-size: 12px; }
+.list-filters input:focus, .list-filters select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px #0ac8b922; }
+.list-filter-count { margin: 0 0 10px auto; color: var(--muted); font-size: 11px; white-space: nowrap; }
 .account-create-card { margin-bottom: 16px; }
 .account-create-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); align-items: end; gap: 13px; padding: 5px 16px 16px; }
 .account-create-form label { display: flex; flex-direction: column; gap: 7px; color: #c1cbd0; font-size: 11px; }
@@ -143,6 +150,7 @@ td { height: 58px; padding: 7px 16px; border-top: 1px solid #1e3544; color: #bac
 .player-empty-lineup { padding: 26px 18px; text-align: center; }
 .roster-layout { display: grid; grid-template-columns: 1fr; align-items: start; gap: 18px; }
 .roster-list-card { margin-bottom: 0; }
+.roster-readonly-note { margin: 0; color: var(--muted); font-size: 11px; }
 .roster-table-wrap { border-bottom: 1px solid var(--line); }
 .roster-table thead { background: #0a2638; }
 .roster-table th { height: 40px; }
@@ -157,9 +165,15 @@ td { height: 58px; padding: 7px 16px; border-top: 1px solid #1e3544; color: #bac
 .roster-detail-card { min-height: 0; overflow: hidden; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .close-detail { border: 0; background: transparent; color: #a8b5bd; font-size: 20px; }
 .lineup-label { display: flex; justify-content: space-between; padding: 14px; color: #9aabb4; font-size: 10px; font-weight: 600; }
+.lineup-counts { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
+.lineup-count { padding: 5px 8px; border: 1px solid #27616b; border-radius: 999px; font-size: 9px; white-space: nowrap; }
+.lineup-count-starters { background: #0ac8b916; color: var(--accent-light); }
+.lineup-count-subs { border-color: #776746; background: #c8aa6e12; color: var(--gold-light); }
 .lineup-row { display: grid; min-height: 47px; grid-template-columns: 55px minmax(0, 1fr) 94px auto; align-items: center; gap: 9px; padding: 7px 16px; border-top: 1px solid #1e3544; }
+.lineup-row-readonly { grid-template-columns: 55px minmax(0, 1fr) auto; }
 .lineup-position, .lineup-status { color: var(--muted); font-size: 10px; }
 .lineup-row strong { overflow: hidden; color: #e5e5dc; font-size: 11px; font-weight: 500; text-overflow: ellipsis; white-space: nowrap; }
+.lineup-validation-help { grid-column: 1 / -1; margin: -3px 0 2px; color: #f0a48d; }
 .lineup-role-select, .assignment-form select { min-width: 0; height: 31px; padding: 0 7px; border: 1px solid #345165; border-radius: 4px; background: #091a28; color: #e8e4d8; font-size: 10px; }
 .lineup-role-select:focus, .assignment-form select:focus { border-color: var(--accent); outline: none; }
 .lineup-role-select:disabled, .assignment-form select:disabled { opacity: .65; }
@@ -170,6 +184,7 @@ td { height: 58px; padding: 7px 16px; border-top: 1px solid #1e3544; color: #bac
 .assignment-form select { width: 100%; height: 36px; padding: 0 9px; }
 .assignment-button { min-height: 36px; padding: 0 12px; font-size: 11px; white-space: nowrap; }
 .assignment-help { grid-column: 1 / -1; margin: -2px 0 0; color: #91a0a9; font-size: 10px; }
+.assignment-validation-error { color: #f0a48d; }
 .empty-lineup { padding: 16px 14px; color: var(--muted); font-size: 11px; }
 .detail-placeholder { display: flex; min-height: 260px; flex-direction: column; align-items: center; justify-content: center; }
 .workspace-footer { padding: 14px 30px; border-top: 1px solid var(--line); color: #80919b; text-align: right; font-size: 10px; }
@@ -177,6 +192,14 @@ td { height: 58px; padding: 7px 16px; border-top: 1px solid #1e3544; color: #bac
 .toast-error { border-color: #82574d; background: #32262a; color: #f0b5a2; }
 .modal-backdrop { position: fixed; z-index: 20; inset: 0; display: grid; place-items: center; padding: 20px; background: #020a11c9; }
 .dialog { width: min(100%, 440px); padding: 22px; border: 1px solid #27616b; border-radius: 6px; background: #091a2b; box-shadow: 0 18px 55px #0009; }
+.confirmation-dialog { width: min(calc(100% - 32px), 440px); padding: 0; border: 1px solid #27616b; border-radius: 8px; background: #091a2b; color: var(--text); box-shadow: 0 18px 55px #0009; }
+.confirmation-dialog::backdrop { background: #020a11c9; }
+.confirmation-content { padding: 24px; }
+.confirmation-content h2 { margin: 0; color: #eee8da; font-size: 19px; font-weight: 600; }
+.confirmation-content > p { margin: 12px 0 22px; color: #b7c2c7; font-size: 13px; line-height: 1.6; }
+.confirmation-dialog :focus-visible { outline: 3px solid var(--accent-light); outline-offset: 3px; }
+.confirmation-danger { border-color: #a76b5c; background: linear-gradient(180deg, #c17b68, #985848); color: #fff7f2; }
+.confirmation-danger:hover { border-color: #e19d88; background: linear-gradient(180deg, #d38c77, #ad6654); }
 .dialog-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
 .dialog-heading h2 { margin: 0; color: #eee8da; font-size: 20px; font-weight: 600; }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -189,68 +212,3 @@ td { height: 58px; padding: 7px 16px; border-top: 1px solid #1e3544; color: #bac
 .request-dialog .dialog-heading { gap: 18px; }
 .request-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .request-actions .row-action-danger { color: #d08e7d; }
-
-@media (max-width: 760px) {
-  .main-panel { background-attachment: scroll; }
-  .request-dialog { max-height: calc(100vh - 24px); grid-template-columns: minmax(0, 1fr); grid-template-rows: 150px minmax(0, 1fr); }
-  .request-dialog-image { min-height: 0; background-position: center 36%; }
-  .request-dialog-content { max-height: calc(100vh - 174px); padding: 18px; }
-  .login-page { grid-template-columns: minmax(0, 1fr); align-content: start; gap: 0; }
-  .login-banner { min-height: 42vh; border-right: 0; border-bottom: 1px solid #29485b; background-position: center 38%; }
-  .login-card { width: min(calc(100% - 40px), 410px); margin: 28px auto 36px; }
-  .workspace { grid-template-columns: minmax(0, 1fr); }
-  .app-sidebar { position: relative; display: grid; height: auto; min-height: 0; grid-template-columns: minmax(0, 1fr) auto; align-items: center; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--line); }
-  .sidebar-heading { display: none; }
-  .sidebar-nav { display: flex; gap: 3px; }
-  .sidebar-item { min-height: 39px; justify-content: center; gap: 7px; padding: 0 9px; border-bottom: 2px solid transparent; border-left: 0; }
-  .sidebar-item.active { border-bottom-color: var(--accent); }
-  .sidebar-count { min-width: 16px; height: 16px; font-size: 9px; }
-  .sidebar-account { display: flex; gap: 8px; margin: 0; padding: 0 0 0 10px; border-top: 0; }
-  .sidebar-account .profile-avatar, .sidebar-name { display: none; }
-  .sidebar-logout { white-space: nowrap; }
-  .player-admin-heading { align-items: flex-end; }
-  .section-heading { gap: 10px; }
-  .account-create-form { grid-template-columns: 1fr 1fr; }
-  .content-area { padding: 24px 16px; }
-  .roster-layout { grid-template-columns: minmax(0, 1fr); gap: 10px; }
-  .player-roster-tab { min-width: 170px; }
-  .player-lineup-table th, .player-lineup-table td { padding-right: 12px; padding-left: 12px; }
-  .assignment-form { grid-template-columns: minmax(0, 1fr) minmax(130px, 170px); gap: 9px; }
-  .assignment-button { grid-column: 1 / -1; }
-}
-
-@media (max-width: 480px) {
-  .app-sidebar { grid-template-columns: minmax(0, 1fr); gap: 5px; padding: 7px 8px 8px; }
-  .sidebar-nav { justify-content: stretch; }
-  .sidebar-item { flex: 1; gap: 5px; padding: 0 5px; font-size: 11px; }
-  .sidebar-icon { width: 20px; height: 20px; }
-  .sidebar-count { min-width: 14px; height: 14px; font-size: 8px; }
-  .sidebar-account { justify-content: flex-end; padding: 0 5px; }
-  .sidebar-logout { font-size: 10px; }
-  .login-card { padding: 25px 21px; }
-  .page-heading { align-items: flex-start; flex-direction: column; }
-  .player-admin-heading { align-items: flex-end; }
-  .section-heading { align-items: flex-start; }
-  .metrics-grid { gap: 8px; }
-  .metric-card { padding: 12px 10px; }
-  .metric-card strong { font-size: 21px; }
-  .metric-label { font-size: 9px; }
-  .account-create-form { grid-template-columns: 1fr; }
-  .account-create-form .primary-button { width: 100%; }
-  .request-dialog .form-row { grid-template-columns: 1fr; gap: 0; }
-  th, td { padding-right: 9px; padding-left: 9px; }
-  .row-actions { flex-direction: row; gap: 5px; }
-  .row-action-button { min-height: 28px; padding: 0 7px; font-size: 10px; }
-  .request-actions { flex-direction: column; }
-  .roster-table th, .roster-table td { padding-right: 7px; padding-left: 7px; }
-  .roster-name-button { gap: 6px; }
-  .roster-name-button .roster-symbol { width: 28px; height: 28px; font-size: 10px; }
-  .roster-name-button strong { font-size: 10px; }
-  .roster-row-actions { flex-direction: row; gap: 4px; }
-  .icon-button { font-size: 10px; }
-  .workspace-footer { padding-right: 16px; padding-left: 16px; }
-  .lineup-row { grid-template-columns: 42px minmax(0, 1fr) 78px auto; gap: 6px; padding-right: 9px; padding-left: 9px; }
-  .lineup-role-select { padding: 0 3px; font-size: 9px; }
-  .assignment-form { grid-template-columns: minmax(0, 1fr); padding: 12px; }
-  .assignment-button { grid-column: auto; }
-}

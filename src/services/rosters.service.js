@@ -14,6 +14,11 @@ export const crearRoster = ({ nombre, juego = 'League of Legends', tipo, tempora
 
 export const listarRosters = () => Roster.findAll();
 
+export const listarRostersPublicos = () => Roster.findAll({
+    attributes: ['id', 'nombre', 'juego', 'tipo', 'temporada'],
+    order: [['nombre', 'ASC']]
+});
+
 export const listarRostersDeEntrenador = (idEntrenador) => Roster.findAll({
     where: { id_entrenador: idEntrenador },
     order: [['nombre', 'ASC']]
@@ -35,13 +40,18 @@ export const listarRostersDeJugador = async (idJugador) => {
     });
 };
 
-export const obtenerRoster = async (id) => {
-    const roster = await Roster.findByPk(id, {
+export const obtenerRoster = async (id, publico = false) => {
+    const opciones = {
         include: [{
             model: Jugador,
             through: { attributes: ['rol_en_roster'] }
         }]
-    });
+    };
+    if (publico) {
+        opciones.attributes = ['id', 'nombre', 'juego', 'tipo', 'temporada'];
+    }
+
+    const roster = await Roster.findByPk(id, opciones);
 
     if (!roster) throw new RosterServiceError(404, 'Roster no encontrado');
 

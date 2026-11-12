@@ -47,7 +47,7 @@ Para ejecutar este proyecto de manera local, necesitas tener instalado:
    ```powershell
    npm run db:seed:demo
    ```
-   El seeder agrega 15 perfiles/cuentas de jugador y asigna cada roster a un entrenador activo. Si no hay tres entrenadores activos, crea los que falten.
+   El seeder agrega 15 perfiles/cuentas de jugador y asigna cada roster a un entrenador activo. Si no hay tres entrenadores activos, crea los que falten. Al volver a ejecutarlo, restaura las alineaciones demo: corrige los roles y las asignaciones de los rosters de T1, G2 y Gen.G; si quita asignaciones extra, conserva los perfiles de jugador.
 
    Cuentas demo de jugadores: `Jugador1@gmail.com` a `Jugador15@gmail.com`; la contraseña corresponde al número (por ejemplo, `Jugador1@gmail.com` / `Jugador1`). La cuenta existente `Jugador1@gmail.com`, vinculada a Faker, tendrá la contraseña `Jugador1` tras cargar el seeder. Si se crean entrenadores demo, sus credenciales se muestran en la salida del comando y usan el mismo patrón (`EntrenadorN@gmail.com` / `EntrenadorN`). Son credenciales públicas de demostración: no las uses en producción.
 
@@ -101,6 +101,21 @@ Desde la pantalla de inicio de sesión, una persona puede seleccionar **Crear Cu
 
 La tabla de solicitudes requiere aplicar las migraciones pendientes con `npm run db:migrate` desde la carpeta raíz `eaSports`.
 
+## Pruebas E2E con Playwright
+
+Con el backend y el frontend en ejecución, configura `PLAYWRIGHT_ADMIN_EMAIL` y `PLAYWRIGHT_ADMIN_PASSWORD` en la terminal, sin guardarlos en el repositorio. Desde `frontend`, ejecuta el test en un navegador:
+
+```powershell
+$env:PLAYWRIGHT_ADMIN_EMAIL = "correo-admin"
+$env:PLAYWRIGHT_ADMIN_PASSWORD = "contraseña-admin"
+npx playwright test tests/pruebasWright.spec.ts --project=chromium --headed
+```
+
+El test usa cuentas y datos demo, y modifica alineaciones y solicitudes. Ejecútalo en una base de datos de pruebas, no en datos que quieras conservar.
+
+## Consulta pública de solo lectura
+
+Las rutas `GET /api/v1/jugadores`, `GET /api/v1/jugadores/:id`, `GET /api/v1/rosters`, `GET /api/v1/rosters/:id` y `GET /api/v1/rosters/:id/jugadores` permiten consultar información sin iniciar sesión. Las respuestas públicas de jugadores no incluyen nombre real ni estado, y las de rosters no exponen el ID de la cuenta propietaria. Las mutaciones de jugadores, rosters y alineaciones requieren una sesión de administrador y un token CSRF; entrenadores solo pueden consultar jugadores y rosters.
 
 ## Probar la API con REST Client
 

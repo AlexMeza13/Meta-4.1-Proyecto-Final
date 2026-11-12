@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 
 const { app } = defineProps({
   app: {
@@ -25,6 +25,20 @@ const {
   guardarCambiosCuenta
 } = app;
 
+const busquedaCuenta = ref('');
+const rolCuenta = ref('');
+const accesoCuenta = ref('');
+const estadoCuenta = ref('');
+const cuentasFiltradas = computed(() => {
+  const busqueda = busquedaCuenta.value.trim().toLocaleLowerCase();
+  return usuarios.value.filter((usuario) =>
+    (!busqueda || [nombreVisibleCuenta(usuario), usuario.email].some((dato) => dato?.toLocaleLowerCase().includes(busqueda))) &&
+    (!rolCuenta.value || usuario.rol === rolCuenta.value) &&
+    (!accesoCuenta.value || usuario.auth_method === accesoCuenta.value) &&
+    (!estadoCuenta.value || usuario.estado === estadoCuenta.value)
+  );
+});
+
 onMounted(() => {
   actualizarDatos(cargarCuentas);
   actualizarDatos(cargarJugadores);
@@ -48,12 +62,39 @@ onMounted(() => {
   </section>
 
   <section class="data-card account-list-card">
-    <div class="section-heading"><div><h2>Cuentas registradas</h2><p>{{ usuarios.length }} cuentas</p></div></div>
-    <div v-if="usuarios.length" class="table-wrap">
+    <div class="section-heading"><div><h2>Cuentas registradas</h2><p>{{ cuentasFiltradas.length }} de {{ usuarios.length }} cuentas</p></div></div>
+    <div v-if="usuarios.length" class="list-filters" aria-label="Filtros de cuentas">
+      <label class="list-filter-search">Buscar
+        <input v-model="busquedaCuenta" type="search" placeholder="Nombre o correo" />
+      </label>
+      <label>Rol
+        <select v-model="rolCuenta">
+          <option value="">Todos</option>
+          <option value="admin">Admin</option>
+          <option value="entrenador">Entrenador</option>
+          <option value="jugador">Jugador</option>
+        </select>
+      </label>
+      <label>Acceso
+        <select v-model="accesoCuenta">
+          <option value="">Todos</option>
+          <option value="google">Google</option>
+          <option value="password">Correo y contraseña</option>
+        </select>
+      </label>
+      <label>Estado
+        <select v-model="estadoCuenta">
+          <option value="">Todos</option>
+          <option value="activo">Activo</option>
+          <option value="inactivo">Inactivo</option>
+        </select>
+      </label>
+    </div>
+    <div v-if="cuentasFiltradas.length" class="table-wrap">
       <table>
         <thead><tr><th>NOMBRE</th><th>CORREO</th><th>ACCESO</th><th>ROL</th><th>PERFIL</th><th>ESTADO</th><th>CREADA</th><th></th></tr></thead>
         <tbody>
-          <tr v-for="usuario in usuarios" :key="usuario.id">
+          <tr v-for="usuario in cuentasFiltradas" :key="usuario.id">
             <td>
               <div class="user-cell">
                 <img v-if="usuario.avatar_url" :src="usuario.avatar_url" alt="" class="profile-avatar profile-avatar-image" referrerpolicy="no-referrer" />
@@ -74,6 +115,7 @@ onMounted(() => {
         </tbody>
       </table>
     </div>
+    <div v-else-if="usuarios.length" class="empty-state"><strong>No hay cuentas que coincidan</strong><p>Prueba cambiando o limpiando los filtros.</p></div>
     <div v-else class="empty-state"><strong>No hay cuentas registradas</strong></div>
   </section>
 </template>

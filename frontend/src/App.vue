@@ -69,6 +69,16 @@ const jugadoresDisponiblesParaRoster = computed(() => {
   const idsAsignados = new Set(jugadoresRoster.value.map((jugador) => jugador.id));
   return jugadores.value.filter((jugador) => !idsAsignados.has(jugador.id));
 });
+const titularesRoster = computed(() =>
+  jugadoresRoster.value.filter((jugador) => jugador.rol_en_roster === 'Titular')
+);
+const errorAsignacionRoster = computed(() => {
+  if (formularioAsignacion.rol !== 'Titular' || !formularioAsignacion.idJugador) return '';
+  const jugador = jugadoresDisponiblesParaRoster.value.find(
+    (elemento) => elemento.id === Number(formularioAsignacion.idJugador)
+  );
+  return jugador ? obtenerErrorTitular(jugador) : '';
+});
 const jugadoresSinCuenta = computed(() => jugadores.value.filter((jugador) =>
   !usuarios.value.some((usuario) => usuario.id_jugador === jugador.id)
 ));
@@ -80,6 +90,22 @@ const nombreJugador = computed(() =>
 const nombreVisibleCuenta = (usuario) => usuario.rol === 'jugador'
   ? usuario.jugador?.nickname || usuario.email.split('@')[0]
   : usuario.display_name || usuario.email.split('@')[0];
+
+function obtenerErrorTitular(jugador, idIgnorado = null) {
+  const otrosTitulares = titularesRoster.value.filter((titular) => titular.id !== idIgnorado);
+  if (otrosTitulares.length >= 5) {
+    return 'El roster ya tiene el máximo de 5 titulares.';
+  }
+  if (otrosTitulares.some((titular) => titular.rol === jugador.rol)) {
+    return `Ya hay un titular con la posición ${jugador.rol}.`;
+  }
+  return '';
+}
+
+function obtenerErrorCambioRolRoster(jugador) {
+  if (jugador.rol_en_roster === 'Titular') return '';
+  return obtenerErrorTitular(jugador, jugador.id);
+}
 
 function mostrarAviso(mensaje, tipo = 'success') {
   aviso.value = mensaje;
@@ -248,7 +274,6 @@ async function aprobarSolicitudCuenta(solicitud) {
 }
 
 async function rechazarSolicitudCuenta(solicitud) {
-  if (!window.confirm(`¿Rechazar y eliminar la solicitud de ${solicitud.email}?`)) return;
   try {
     await api.rejectAccountRequest(solicitud.id);
     await cargarSolicitudes();
@@ -328,7 +353,6 @@ async function guardarJugador() {
 }
 
 async function eliminarJugador(jugador) {
-  if (!window.confirm(`¿Eliminar a ${jugador.nickname}?`)) return;
   try {
     await api.deletePlayer(jugador.id);
     await cargarJugadores();
@@ -395,6 +419,11 @@ async function abrirRoster(id) {
 async function asignarJugadorARoster() {
   if (!rosterSeleccionado.value || !formularioAsignacion.idJugador) return;
 
+  if (errorAsignacionRoster.value) {
+    mostrarAviso(errorAsignacionRoster.value, 'error');
+    return;
+  }
+
   procesandoAlineacion.value = true;
   const idRoster = rosterSeleccionado.value.id;
   try {
@@ -413,6 +442,14 @@ async function asignarJugadorARoster() {
 
 async function cambiarRolJugadorEnRoster(jugador, rol) {
   if (!rosterSeleccionado.value || rol === jugador.rol_en_roster) return;
+
+  if (rol === 'Titular') {
+    const errorValidacion = obtenerErrorCambioRolRoster(jugador);
+    if (errorValidacion) {
+      mostrarAviso(errorValidacion, 'error');
+      return;
+    }
+  }
 
   procesandoAlineacion.value = true;
   const idRoster = rosterSeleccionado.value.id;
@@ -433,9 +470,7 @@ async function cambiarRolJugadorEnRoster(jugador, rol) {
 }
 
 async function quitarJugadorDeRoster(jugador) {
-  if (!rosterSeleccionado.value ||
-      !window.confirm(`¿Quitar a ${jugador.nickname} de este roster?`)) return;
-
+  if (!rosterSeleccionado.value) return;
   procesandoAlineacion.value = true;
   const idRoster = rosterSeleccionado.value.id;
   try {
@@ -450,7 +485,6 @@ async function quitarJugadorDeRoster(jugador) {
 }
 
 async function eliminarRoster(roster) {
-  if (!window.confirm(`¿Eliminar el roster “${roster.nombre}”?`)) return;
   try {
     await api.deleteRoster(roster.id);
     if (rosterSeleccionado.value?.id === roster.id) rosterSeleccionado.value = null;
@@ -564,6 +598,8 @@ const app = {
   formularioRoster,
   formularioUsuario,
   jugadoresDisponiblesParaRoster,
+  errorAsignacionRoster,
+  obtenerErrorCambioRolRoster,
   jugadoresSinCuenta,
   nombreJugador,
   nombreVisibleCuenta,
@@ -670,7 +706,7 @@ onMounted(async () => {
     <PanelLayout v-if="route.meta.panel" :app="app">
       <component :is="Component" :app="app" />
     </PanelLayout>
-    <component :is="Component" v-else :app="app" />
+    <component :is="Component" v-else :app="app       " />
   </RouterView>
   <div v-else class="app-loading" role="status">Cargando...</div>
 </template>

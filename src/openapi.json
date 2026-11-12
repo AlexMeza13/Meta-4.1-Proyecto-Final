@@ -3,7 +3,7 @@
   "info": {
     "title": "API de eSports - Perfiles y Rosters",
     "version": "1.0.0",
-    "description": "Documentacion interactiva para el API de gestion de equipos de eSports. Admin y entrenador gestionan jugadores y rosters; jugador solo consulta rosters donde su perfil esta asignado y sus integrantes. Solo admin puede gestionar cuentas. Las operaciones que modifican datos requieren X-CSRF-Token."
+    "description": "Documentacion interactiva para el API de gestion de equipos de eSports. El publico puede consultar perfiles publicos y rosters en modo de solo lectura; solo admin puede modificar jugadores, rosters y cuentas; entrenador consulta perfiles y sus propios rosters; jugador consulta rosters donde su perfil esta asignado y sus integrantes. Las operaciones que modifican datos requieren X-CSRF-Token."
   },
   "servers": [
     {
@@ -628,20 +628,31 @@
     "/jugadores": {
       "get": {
         "summary": "Listar todos los jugadores",
-        "description": "Disponible para admin y entrenador. El entrenador consulta estos perfiles para agregarlos a sus rosters; solo admin puede crear, editar o eliminar perfiles.",
+        "description": "Publico y cuentas jugador reciben perfiles sin nombre real ni estado; admin y entrenador reciben los datos completos. Solo admin puede crear, editar o eliminar perfiles.",
         "tags": [
           "Jugadores"
         ],
+        "security": [],
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Perfiles publicos para visitantes y cuentas jugador; admin y entrenador reciben los perfiles completos.",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Jugador"
-                  }
+                  "oneOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/JugadorPublico"
+                      }
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Jugador"
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -709,7 +720,7 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "example": {
-                  "error": "El nickname ya esta en uso"
+                  "error": "El nickname \"Faker\" ya está registrado. Elige otro."
                 }
               }
             }
@@ -736,16 +747,25 @@
       ],
       "get": {
         "summary": "Obtener detalle de un jugador",
+        "description": "Publico y cuentas jugador reciben solo el perfil publico; admin y entrenador reciben todos los datos.",
         "tags": [
           "Jugadores"
         ],
+        "security": [],
         "responses": {
           "200": {
             "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Jugador"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/JugadorPublico"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Jugador"
+                    }
+                  ]
                 }
               }
             }
@@ -855,7 +875,7 @@
                   "$ref": "#/components/schemas/ErrorResponse"
                 },
                 "example": {
-                  "error": "El nickname ya esta en uso"
+                  "error": "El nickname \"Faker\" ya está registrado. Elige otro."
                 }
               }
             }
@@ -921,21 +941,32 @@
     },
     "/rosters": {
       "get": {
-        "summary": "Listar los rosters disponibles para la cuenta",
-        "description": "Admin recibe todos los rosters; entrenador solo los que creo; jugador solo los que incluyen su perfil.",
+        "summary": "Listar los rosters publicos o disponibles para la cuenta",
+        "description": "Publico recibe los datos basicos de todos los rosters. Admin recibe todos; entrenador solo los que creo; jugador solo los que incluyen su perfil.",
         "tags": [
           "Rosters"
         ],
+        "security": [],
         "responses": {
           "200": {
             "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/Roster"
-                  }
+                  "oneOf": [
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RosterPublico"
+                      }
+                    },
+                    {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Roster"
+                      }
+                    }
+                  ]
                 }
               }
             }
@@ -947,7 +978,7 @@
       },
       "post": {
         "summary": "Crear un roster",
-        "description": "El roster queda asociado a la cuenta autenticada que lo crea. Admin puede ver y administrar todos los rosters.",
+        "description": "Disponible solo para admin. El roster queda asociado a la cuenta admin autenticada.",
         "tags": [
           "Rosters"
         ],
@@ -992,6 +1023,9 @@
               }
             }
           },
+          "403": {
+            "description": "Se requiere rol admin."
+          },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
           }
@@ -1014,17 +1048,25 @@
       ],
       "get": {
         "summary": "Obtener detalle de un roster",
-        "description": "Admin puede consultar todos los rosters. Entrenador solo puede consultar los que creo; jugador solo puede consultar los que incluyen su perfil.",
+        "description": "Publico puede consultar los datos basicos y la alineacion. Admin puede consultar todos los rosters; entrenador solo los que creo; jugador solo los que incluyen su perfil.",
         "tags": [
           "Rosters"
         ],
+        "security": [],
         "responses": {
           "200": {
             "description": "OK",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Roster"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/RosterPublico"
+                    },
+                    {
+                      "$ref": "#/components/schemas/Roster"
+                    }
+                  ]
                 }
               }
             }
@@ -1065,7 +1107,7 @@
       },
       "put": {
         "summary": "Actualizar un roster",
-        "description": "Admin puede actualizar cualquier roster; entrenador solo puede actualizar los que creo.",
+        "description": "Disponible solo para admin.",
         "tags": [
           "Rosters"
         ],
@@ -1124,7 +1166,7 @@
             }
           },
           "403": {
-            "description": "El entrenador no puede administrar un roster de otra cuenta."
+            "description": "Se requiere rol admin."
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -1133,7 +1175,7 @@
       },
       "delete": {
         "summary": "Eliminar un roster",
-        "description": "Admin puede eliminar cualquier roster; entrenador solo puede eliminar los que creo.",
+        "description": "Disponible solo para admin.",
         "tags": [
           "Rosters"
         ],
@@ -1174,7 +1216,7 @@
             }
           },
           "403": {
-            "description": "El entrenador no puede administrar un roster de otra cuenta."
+            "description": "Se requiere rol admin."
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -1198,10 +1240,11 @@
       ],
       "get": {
         "summary": "Listar jugadores de un roster",
-        "description": "Las cuentas jugador solo pueden consultar integrantes de rosters donde su perfil esta asignado; entrenador solo puede consultar rosters propios.",
+        "description": "Publico puede consultar la alineacion. Las cuentas jugador solo pueden consultar integrantes de rosters donde su perfil esta asignado; entrenador solo puede consultar rosters propios.",
         "tags": [
           "Asignaciones"
         ],
+        "security": [],
         "responses": {
           "200": {
             "description": "OK",
@@ -1252,6 +1295,7 @@
       },
       "post": {
         "summary": "Asignar jugador a roster",
+        "description": "Disponible solo para admin.",
         "tags": [
           "Asignaciones"
         ],
@@ -1323,7 +1367,7 @@
             }
           },
           "403": {
-            "description": "El entrenador no puede administrar un roster de otra cuenta."
+            "description": "Se requiere rol admin."
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -1358,6 +1402,7 @@
       ],
       "put": {
         "summary": "Cambiar rol en roster",
+        "description": "Disponible solo para admin.",
         "tags": [
           "Asignaciones"
         ],
@@ -1429,7 +1474,7 @@
             }
           },
           "403": {
-            "description": "El entrenador no puede administrar un roster de otra cuenta."
+            "description": "Se requiere rol admin."
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -1438,6 +1483,7 @@
       },
       "delete": {
         "summary": "Quitar jugador del roster",
+        "description": "Disponible solo para admin.",
         "tags": [
           "Asignaciones"
         ],
@@ -1478,7 +1524,7 @@
             }
           },
           "403": {
-            "description": "El entrenador no puede administrar un roster de otra cuenta."
+            "description": "Se requiere rol admin."
           },
           "500": {
             "$ref": "#/components/responses/InternalServerError"
@@ -1738,6 +1784,35 @@
           }
         }
       },
+      "JugadorPublico": {
+        "type": "object",
+        "description": "Datos del perfil disponibles sin autenticacion. No incluye nombre real ni estado.",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "nickname": {
+            "type": "string",
+            "example": "Faker"
+          },
+          "pais": {
+            "type": "string",
+            "example": "KR"
+          },
+          "rol": {
+            "type": "string",
+            "enum": [
+              "Top",
+              "Jungle",
+              "Mid",
+              "ADC",
+              "Support"
+            ],
+            "example": "Mid"
+          }
+        }
+      },
       "JugadorInput": {
         "type": "object",
         "required": [
@@ -1818,6 +1893,42 @@
             "type": "array",
             "items": {
               "$ref": "#/components/schemas/JugadorEnRoster"
+            }
+          },
+          "RosterPublico": {
+            "type": "object",
+            "description": "Datos del roster disponibles sin autenticacion. No incluye el identificador de la cuenta propietaria.",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "example": 1
+              },
+              "nombre": {
+                "type": "string",
+                "example": "T1 Principal"
+              },
+              "juego": {
+                "type": "string",
+                "example": "League of Legends"
+              },
+              "tipo": {
+                "type": "string",
+                "enum": [
+                  "Principal",
+                  "Academy"
+                ],
+                "example": "Principal"
+              },
+              "temporada": {
+                "type": "string",
+                "example": "2026"
+              },
+              "jugadores": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/JugadorEnRoster"
+                }
+              }
             }
           },
           "createdAt": {

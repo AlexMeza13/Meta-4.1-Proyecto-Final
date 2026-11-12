@@ -47,6 +47,15 @@ export const verificarToken = async (req, res, next) => {
     next();
 };
 
+export const verificarTokenOpcional = (req, res, next) => {
+    if (!req.cookies.jwt_token) {
+        req.usuario = null;
+        return next();
+    }
+
+    return verificarToken(req, res, next);
+};
+
 export const verificarCsrf = (req, res, next) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) {
         return next();
@@ -81,6 +90,9 @@ export const requerirRol = (...rolesPermitidos) => (req, res, next) => {
 };
 
 export const requerirAccesoRoster = async (req, res, next) => {
+    if (!req.usuario) {
+        return next();
+    }
     if (req.usuario.rol === 'admin') {
         return next();
     }

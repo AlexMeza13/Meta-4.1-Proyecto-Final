@@ -195,6 +195,7 @@ module.exports = {
         seededPlayers.set(playerData.nickname, player);
       }
 
+      const restoredLineups = [];
       for (const [teamIndex, team] of teams.entries()) {
         const coach = activeTrainers[teamIndex];
         const rosterData = {
@@ -233,19 +234,50 @@ module.exports = {
           transaction,
           lock: transaction.LOCK.UPDATE
         });
-        const expectedAssignments = new Map(team.players.map((playerData) => [
-          seededPlayers.get(playerData.nickname).id,
-          'Titular'
-        ]));
-        if (assignments.length !== expectedAssignments.size ||
-            assignments.some((assignment) =>
-              expectedAssignments.get(assignment.id_jugador) !== assignment.rol_en_roster
-            )) {
-          throw new Error(`El roster ${team.name} existe, pero su alineación no coincide con los datos demo.`);
+        const expectedPlayerIds = new Set(
+          team.players.map((playerData) => seededPlayers.get(playerData.nickname).id)
+        );
+        const existingPlayerIds = new Set(assignments.map((assignment) => assignment.id_jugador));
+        const extraPlayerIds = assignments
+          .filter((assignment) => !expectedPlayerIds.has(assignment.id_jugador))
+          .map((assignment) => assignment.id_jugador);
+        let lineupChanged = false;
+
+        if (extraPlayerIds.length) {
+          await RosterJugador.destroy({
+            where: { id_roster: roster.id, id_jugador: extraPlayerIds },
+            transaction
+          });
+          lineupChanged = true;
         }
+
+        for (const assignment of assignments) {
+          if (expectedPlayerIds.has(assignment.id_jugador) && assignment.rol_en_roster !== 'Titular') {
+            await assignment.update({ rol_en_roster: 'Titular' }, { transaction });
+            lineupChanged = true;
+          }
+        }
+
+        const missingAssignments = team.players
+          .filter((playerData) => !existingPlayerIds.has(seededPlayers.get(playerData.nickname).id))
+          .map((playerData) => ({
+            id_roster: roster.id,
+            id_jugador: seededPlayers.get(playerData.nickname).id,
+            rol_en_roster: 'Titular'
+          }));
+
+        if (missingAssignments.length) {
+          await RosterJugador.bulkCreate(missingAssignments, { transaction });
+          lineupChanged = true;
+        }
+
+        if (lineupChanged) restoredLineups.push(team.name);
       }
 
       console.log(`Datos LoL demo listos: ${teams.length} rosters, ${seededPlayers.size} jugadores vinculados a cuentas.`);
+      if (restoredLineups.length) {
+        console.log(`Alineaciones demo restauradas: ${restoredLineups.join(', ')}.`);
+      }
       if (createdPlayerCount || createdAccountCount) {
         console.log(`Nuevos perfiles: ${createdPlayerCount}; nuevas cuentas de jugador: ${createdAccountCount}.`);
       }

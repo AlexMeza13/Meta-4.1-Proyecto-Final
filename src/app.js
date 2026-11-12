@@ -9,7 +9,7 @@ import rutasRosters from './routes/rosters.routes.js';
 import rutasAuxiliares from './routes/auxiliares.routes.js';
 import swaggerUi from 'swagger-ui-express';
 import swaggerDocument from './openapi.json' with { type: 'json' };
-import { requerirRol, verificarCsrf, verificarToken } from './middleware/auth.middleware.js';
+import { verificarCsrf, verificarToken } from './middleware/auth.middleware.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -28,15 +28,9 @@ app.use('/api/v1/docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 app.use('/api/v1/auth', rutasAuth);
 
-app.use(
-    '/api/v1/jugadores',
-    verificarToken,
-    verificarCsrf,
-    requerirRol('admin', 'entrenador'),
-    rutasJugadores
-);
+app.use('/api/v1/jugadores', rutasJugadores);
 
-app.use('/api/v1/rosters', verificarToken, verificarCsrf, rutasRosters);
+app.use('/api/v1/rosters', rutasRosters);
 
 app.use('/api/v1/usuarios', verificarToken, verificarCsrf, rutasUsuarios);
 

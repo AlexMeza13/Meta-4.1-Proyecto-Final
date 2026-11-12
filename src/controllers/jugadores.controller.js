@@ -42,7 +42,11 @@ export const crearJugador = async (req, res) => {
 };
 
 export const listarJugadores = async (req, res) => {
-    const jugadores = await jugadoresService.listarJugadores();
+    const puedeConsultarDatosCompletos = req.usuario &&
+        ['admin', 'entrenador'].includes(req.usuario.rol);
+    const jugadores = puedeConsultarDatosCompletos
+        ? await jugadoresService.listarJugadores()
+        : await jugadoresService.listarJugadoresPublicos();
     res.status(200).json(jugadores);
 };
 
@@ -50,7 +54,11 @@ export const obtenerJugador = async (req, res) => {
     const errorValidacion = validarIdJugador(req.params.id);
     if (errorValidacion) return responderErrorValidacion(res, errorValidacion);
 
-    const jugador = await jugadoresService.obtenerJugador(req.params.id);
+    const puedeConsultarDatosCompletos = req.usuario &&
+        ['admin', 'entrenador'].includes(req.usuario.rol);
+    const jugador = puedeConsultarDatosCompletos
+        ? await jugadoresService.obtenerJugador(req.params.id)
+        : await jugadoresService.obtenerJugadorPublico(req.params.id);
     res.status(200).json(jugador);
 };
 
