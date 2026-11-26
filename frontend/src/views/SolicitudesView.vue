@@ -1,21 +1,11 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
+import { api } from '../services/api.js';
+import { useNotifications } from '../composables/useNotifications.js';
+import { solicitudesPendientes } from '../composables/useSolicitudesPendientes.js';
 
-const { app } = defineProps({
-  app: {
-    type: Object,
-    required: true
-  }
-});
-
-const {
-  solicitudesCuenta,
-  actualizarDatos,
-  cargarSolicitudes,
-  aprobarSolicitudCuenta,
-  rechazarSolicitudCuenta
-} = app;
-
+const { mostrarAviso } = useNotifications();
+const solicitudesCuenta = ref([]);
 const dialogoRechazar = ref(null);
 const solicitudARechazar = ref(null);
 const busquedaSolicitud = ref('');
@@ -31,7 +21,16 @@ const solicitudesFiltradas = computed(() => {
   );
 });
 
-onMounted(() => actualizarDatos(cargarSolicitudes));
+onMounted(cargarSolicitudes);
+
+async function cargarSolicitudes() {
+  try {
+    solicitudesCuenta.value = await api.listAccountRequests();
+    solicitudesPendientes.value = solicitudesCuenta.value.length;
+  } catch (error) {
+    mostrarAviso(error.message, 'error');
+  }
+}
 
 function confirmarRechazo(solicitud) {
   solicitudARechazar.value = solicitud;
@@ -41,7 +40,25 @@ function confirmarRechazo(solicitud) {
 async function rechazarSolicitudConfirmada() {
   const solicitud = solicitudARechazar.value;
   dialogoRechazar.value.close();
-  if (solicitud) await rechazarSolicitudCuenta(solicitud);
+  if (!solicitud) return;
+
+  try {
+    await api.rejectAccountRequest(solicitud.id);
+    await cargarSolicitudes();
+    mostrarAviso('Solicitud rechazada.');
+  } catch (error) {
+    mostrarAviso(error.message, 'error');
+  }
+}
+
+async function aprobarSolicitudCuenta(solicitud) {
+  try {
+    await api.approveAccountRequest(solicitud.id);
+    await cargarSolicitudes();
+    mostrarAviso('Solicitud aprobada y cuenta creada.');
+  } catch (error) {
+    mostrarAviso(error.message, 'error');
+  }
 }
 </script>
 

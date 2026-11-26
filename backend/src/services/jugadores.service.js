@@ -75,11 +75,26 @@ export const actualizarJugador = async (id, datos) => {
 };
 
 export const eliminarJugador = async (id) => {
-    const cuentaVinculada = await db.Usuario.findOne({ where: { id_jugador: id } });
-    if (cuentaVinculada) {
-        throw new JugadorServiceError(409, 'No se puede eliminar un perfil vinculado a una cuenta');
-    }
+    await db.sequelize.transaction(async (transaction) => {
+        const jugador = await Jugador.findByPk(id, {
+            transaction,
+            lock: transaction.LOCK.UPDATE
+        });
+        if (!jugador) throw new JugadorServiceError(404, 'Jugador no encontrado');
 
-    const eliminados = await Jugador.destroy({ where: { id } });
-    if (!eliminados) throw new JugadorServiceError(404, 'Jugador no encontrado');
+        const asignacion = await db.Roster_Jugador.findOne({
+            where: { id_jugador: id },
+            transaction
+        });
+        if (asignacion) {
+            throw new JugadorServiceError(409, 'No se puede eliminar un jugador que pertenece a un roster. Quítalo de todos los rosters primero.');
+        }
+
+        const cuentaVinculada = await db.Usuario.findOne({
+            where: { id_jugador: id },
+            transaction
+        });
+        if (cuentaVinculada) await cuentaVinculada.destroy({ transaction });
+        await jugador.destroy({ transaction });
+    });
 };

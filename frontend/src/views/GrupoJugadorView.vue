@@ -1,23 +1,19 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
+import { sesionActiva } from '../router/index.js';
+import { api } from '../services/api.js';
+import { useNotifications } from '../composables/useNotifications.js';
 
-const { app } = defineProps({
-  app: {
-    type: Object,
-    required: true
-  }
-});
-
-const {
-  rosters,
-  rosterSeleccionado,
-  jugadoresRoster,
-  nombreJugador,
-  actualizarDatos,
-  cargarRosters,
-  cargarDetalleRoster
-} = app;
-
+const { mostrarAviso } = useNotifications();
+const rosters = ref([]);
+const rosterSeleccionado = ref(null);
+const jugadoresRoster = ref([]);
+const nombreJugador = computed(() =>
+  jugadoresRoster.value.find((jugador) => jugador.id === sesionActiva.value?.id_jugador)?.nickname ||
+  sesionActiva.value?.display_name ||
+  sesionActiva.value?.email?.split('@')[0] ||
+  'Jugador'
+);
 const rolJugador = ref('');
 const asignacionJugador = ref('');
 const jugadoresRosterFiltrados = computed(() => jugadoresRoster.value.filter((jugador) =>
@@ -25,18 +21,32 @@ const jugadoresRosterFiltrados = computed(() => jugadoresRoster.value.filter((ju
   (!asignacionJugador.value || jugador.rol_en_roster === asignacionJugador.value)
 ));
 
-onMounted(() => actualizarDatos(async () => {
-  await cargarRosters();
-  if (rosters.value.length) {
-    await cargarDetalleRoster(rosters.value[0].id);
-  } else {
-    rosterSeleccionado.value = null;
-    jugadoresRoster.value = [];
+onMounted(async () => {
+  try {
+    rosters.value = await api.listRosters();
+    if (rosters.value.length) {
+      await cargarDetalleRoster(rosters.value[0].id);
+    }
+  } catch (error) {
+    mostrarAviso(error.message, 'error');
   }
-}));
+});
 
-function abrirRoster(id) {
-  actualizarDatos(() => cargarDetalleRoster(id));
+async function cargarDetalleRoster(id) {
+  const [roster, integrantes] = await Promise.all([
+    api.getRoster(id),
+    api.getRosterPlayers(id)
+  ]);
+  rosterSeleccionado.value = roster;
+  jugadoresRoster.value = integrantes;
+}
+
+async function abrirRoster(id) {
+  try {
+    await cargarDetalleRoster(id);
+  } catch (error) {
+    mostrarAviso(error.message, 'error');
+  }
 }
 </script>
 

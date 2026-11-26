@@ -14,26 +14,6 @@ module.exports = (sequelize, DataTypes) => {
     }
   }
   Roster_Jugador.init({
-    id_roster: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: 'Rosters',
-        key: 'id'
-      },
-      onUpdate: 'CASCADE',
-      onDelete: 'CASCADE'
-    },
-    id_jugador: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: 'Jugadors',
-        key: 'id'
-      },
-      onUpdate: 'CASCADE',
-      onDelete: 'CASCADE'
-    },
     rol_en_roster: DataTypes.STRING
   }, {
     sequelize,

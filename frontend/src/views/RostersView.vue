@@ -1,39 +1,35 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue';
+import { sesionActiva } from '../router/index.js';
+import { api } from '../services/api.js';
+import { useNotifications } from '../composables/useNotifications.js';
 
-const { app } = defineProps({
-  app: {
-    type: Object,
-    required: true
-  }
+const sesion = sesionActiva;
+const { mostrarAviso } = useNotifications();
+const rosters = ref([]);
+const jugadores = ref([]);
+const rosterSeleccionado = ref(null);
+const jugadoresRoster = ref([]);
+const procesandoAlineacion = ref(false);
+const procesandoRoster = ref(false);
+const formularioAsignacion = ref({ idJugador: 0, rol: 'Titular' });
+const formularioRoster = ref({
+  nombre: '',
+  tipo: 'Principal',
+  temporada: new Date().getFullYear().toString()
 });
-
-const {
-  sesion,
-  rosters,
-  rosterSeleccionado,
-  jugadoresRoster,
-  procesandoAlineacion,
-  formularioAsignacion,
-  jugadoresDisponiblesParaRoster,
-  errorAsignacionRoster,
-  obtenerErrorCambioRolRoster,
-  actualizarDatos,
-  cargarJugadores,
-  cargarRosters,
-  abrirDialogoRoster,
-  abrirRoster,
-  eliminarRoster,
-  cambiarRolJugadorEnRoster,
-  quitarJugadorDeRoster,
-  asignarJugadorARoster
-} = app;
-
+const idRosterEditado = ref(null);
+const dialogoRoster = ref(false);
 const esAdmin = computed(() => sesion.value?.rol === 'admin');
 const dialogoEliminarRoster = ref(null);
 const dialogoQuitarJugador = ref(null);
 const rosterAEliminar = ref(null);
 const jugadorAQuitar = ref(null);
+const tiposDisponibles = ref(['Principal', 'Academy']);
+const jugadoresDisponiblesParaRoster = computed(() => {
+  const idsAsignados = new Set(jugadoresRoster.value.map((jugador) => jugador.id));
+  return jugadores.value.filter((jugador) => !idsAsignados.has(jugador.id));
+});
 const titularesRoster = computed(() =>
   jugadoresRoster.value.filter((jugador) => jugador.rol_en_roster === 'Titular')
 );
@@ -43,8 +39,11 @@ const suplentesRoster = computed(() =>
 const busquedaRoster = ref('');
 const tipoRoster = ref('');
 const temporadaRoster = ref('');
-const tiposRoster = computed(() => [...new Set(rosters.value.map((roster) => roster.tipo).filter(Boolean))].sort());
 const temporadasRoster = computed(() => [...new Set(rosters.value.map((roster) => String(roster.temporada)).filter(Boolean))].sort((a, b) => b.localeCompare(a, undefined, { numeric: true })));
+const tiposRoster = computed(() => [...new Set([
+  ...tiposDisponibles.value,
+  ...rosters.value.map((roster) => roster.tipo).filter(Boolean)
+])].sort());
 const rostersFiltrados = computed(() => {
   const busqueda = busquedaRoster.value.trim().toLocaleLowerCase();
   return rosters.value.filter((roster) =>
@@ -53,11 +52,178 @@ const rostersFiltrados = computed(() => {
     (!temporadaRoster.value || String(roster.temporada) === temporadaRoster.value)
   );
 });
-
-onMounted(() => {
-  actualizarDatos(cargarRosters);
-  actualizarDatos(cargarJugadores);
+const errorAsignacionRoster = computed(() => {
+  if (formularioAsignacion.value.rol !== 'Titular' || !formularioAsignacion.value.idJugador) return '';
+  const jugador = jugadoresDisponiblesParaRoster.value.find(
+    (elemento) => elemento.id === Number(formularioAsignacion.value.idJugador)
+  );
+  return jugador ? obtenerErrorTitular(jugador) : '';
 });
+
+onMounted(async () => {
+  const resultados = await Promise.allSettled([
+    api.listRosters(),
+    api.listPlayers(),
+    api.getRosterTypes()
+  ]);
+  if (resultados[0].status === 'fulfilled') rosters.value = resultados[0].value;
+  else mostrarAviso(resultados[0].reason.message, 'error');
+  if (resultados[1].status === 'fulfilled') jugadores.value = resultados[1].value;
+  else mostrarAviso(resultados[1].reason.message, 'error');
+  if (resultados[2].status === 'fulfilled') tiposDisponibles.value = resultados[2].value;
+  else mostrarAviso(resultados[2].reason.message, 'error');
+});
+
+function obtenerErrorTitular(jugador, idIgnorado = null) {
+  const otrosTitulares = titularesRoster.value.filter((titular) => titular.id !== idIgnorado);
+  if (otrosTitulares.length >= 5) return 'El roster ya tiene el máximo de 5 titulares.';
+  if (otrosTitulares.some((titular) => titular.rol === jugador.rol)) {
+    return `Ya hay un titular con la posición ${jugador.rol}.`;
+  }
+  return '';
+}
+
+function obtenerErrorCambioRolRoster(jugador) {
+  if (jugador.rol_en_roster === 'Titular') return '';
+  return obtenerErrorTitular(jugador, jugador.id);
+}
+
+async function cargarRosters() {
+  rosters.value = await api.listRosters();
+}
+
+async function cargarDetalleRoster(id) {
+  const [roster, integrantes] = await Promise.all([
+    api.getRoster(id),
+    api.getRosterPlayers(id)
+  ]);
+  rosterSeleccionado.value = roster;
+  jugadoresRoster.value = integrantes;
+  formularioAsignacion.value.idJugador = jugadoresDisponiblesParaRoster.value[0]?.id ?? 0;
+  formularioAsignacion.value.rol = 'Titular';
+}
+
+async function abrirRoster(id) {
+  try {
+    await cargarDetalleRoster(id);
+  } catch (error) {
+    mostrarAviso(error.message, 'error');
+  }
+}
+
+function abrirDialogoRoster(roster = null) {
+  idRosterEditado.value = roster?.id ?? null;
+  formularioRoster.value = roster ? {
+    nombre: roster.nombre,
+    tipo: roster.tipo,
+    temporada: roster.temporada
+  } : {
+    nombre: '',
+    tipo: tiposDisponibles.value[0] || 'Principal',
+    temporada: new Date().getFullYear().toString()
+  };
+  dialogoRoster.value = true;
+}
+
+async function guardarRoster() {
+  procesandoRoster.value = true;
+  try {
+    if (idRosterEditado.value) {
+      await api.updateRoster(idRosterEditado.value, { ...formularioRoster.value });
+      mostrarAviso('Roster actualizado.');
+    } else {
+      await api.createRoster({ ...formularioRoster.value });
+      mostrarAviso('Roster creado.');
+    }
+    dialogoRoster.value = false;
+    await cargarRosters();
+    if (rosterSeleccionado.value) await abrirRoster(rosterSeleccionado.value.id);
+  } catch (error) {
+    mostrarAviso(error.message, 'error');
+  } finally {
+    procesandoRoster.value = false;
+  }
+}
+
+async function asignarJugadorARoster() {
+  if (!rosterSeleccionado.value || !formularioAsignacion.value.idJugador) return;
+  if (errorAsignacionRoster.value) {
+    mostrarAviso(errorAsignacionRoster.value, 'error');
+    return;
+  }
+
+  procesandoAlineacion.value = true;
+  const idRoster = rosterSeleccionado.value.id;
+  try {
+    await api.assignPlayerToRoster(idRoster, {
+      id_jugador: Number(formularioAsignacion.value.idJugador),
+      rol_en_roster: formularioAsignacion.value.rol
+    });
+    await cargarDetalleRoster(idRoster);
+    mostrarAviso('Jugador asignado al roster.');
+  } catch (error) {
+    mostrarAviso(error.message, 'error');
+  } finally {
+    procesandoAlineacion.value = false;
+  }
+}
+
+async function cambiarRolJugadorEnRoster(jugador, rol) {
+  if (!rosterSeleccionado.value || rol === jugador.rol_en_roster) return;
+  if (rol === 'Titular') {
+    const errorValidacion = obtenerErrorCambioRolRoster(jugador);
+    if (errorValidacion) {
+      mostrarAviso(errorValidacion, 'error');
+      return;
+    }
+  }
+
+  procesandoAlineacion.value = true;
+  const idRoster = rosterSeleccionado.value.id;
+  try {
+    await api.updateRosterPlayerRole(idRoster, jugador.id, rol);
+    await cargarDetalleRoster(idRoster);
+    mostrarAviso('Rol actualizado.');
+  } catch (error) {
+    mostrarAviso(error.message, 'error');
+    try {
+      await cargarDetalleRoster(idRoster);
+    } catch (refreshError) {
+      mostrarAviso(`No se pudo actualizar la alineación: ${refreshError.message}`, 'error');
+    }
+  } finally {
+    procesandoAlineacion.value = false;
+  }
+}
+
+async function quitarJugadorDeRoster(jugador) {
+  if (!rosterSeleccionado.value) return;
+  procesandoAlineacion.value = true;
+  const idRoster = rosterSeleccionado.value.id;
+  try {
+    await api.removePlayerFromRoster(idRoster, jugador.id);
+    await cargarDetalleRoster(idRoster);
+    mostrarAviso('Jugador quitado del roster.');
+  } catch (error) {
+    mostrarAviso(error.message, 'error');
+  } finally {
+    procesandoAlineacion.value = false;
+  }
+}
+
+async function eliminarRoster(roster) {
+  try {
+    await api.deleteRoster(roster.id);
+    if (rosterSeleccionado.value?.id === roster.id) {
+      rosterSeleccionado.value = null;
+      jugadoresRoster.value = [];
+    }
+    await cargarRosters();
+    mostrarAviso('Roster eliminado.');
+  } catch (error) {
+    mostrarAviso(error.message, 'error');
+  }
+}
 
 function confirmarEliminarRoster(roster) {
   rosterAEliminar.value = roster;
@@ -186,6 +352,23 @@ async function quitarJugadorConfirmado() {
       </template>
       <div v-else class="detail-placeholder"><strong>Selecciona un roster</strong><p>Consulta aquí su alineación.</p></div>
     </section>
+  </div>
+  <div v-if="dialogoRoster" class="modal-backdrop" @click.self="dialogoRoster = false">
+    <form class="dialog" @submit.prevent="guardarRoster">
+      <div class="dialog-heading">
+        <div><h2>{{ idRosterEditado ? 'Editar roster' : 'Nuevo roster' }}</h2></div>
+        <button type="button" class="close-detail" aria-label="Cerrar" @click="dialogoRoster = false">×</button>
+      </div>
+      <label>Nombre del roster<input v-model.trim="formularioRoster.nombre" required maxlength="255" placeholder="EA Main Squad" /></label>
+      <div class="form-row">
+        <label>Tipo<select v-model="formularioRoster.tipo"><option v-for="tipo in tiposRoster" :key="tipo">{{ tipo }}</option></select></label>
+        <label>Temporada<input v-model.trim="formularioRoster.temporada" required maxlength="255" /></label>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" class="secondary-button" @click="dialogoRoster = false">Cancelar</button>
+        <button class="primary-button" :disabled="procesandoRoster">{{ procesandoRoster ? 'Guardando…' : 'Guardar roster' }}</button>
+      </div>
+    </form>
   </div>
   <dialog
     ref="dialogoEliminarRoster"

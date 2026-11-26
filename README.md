@@ -22,37 +22,39 @@ Para ejecutar este proyecto de manera local, necesitas tener instalado:
    cd eaSports
    ```
 
-2. **Instalar las dependencias del proyecto:**
+2. **Instalar las dependencias del backend:**
    ```bash
+   cd backend
    npm install
+   cd ..
    ```
 
 3. **Levantar la base de datos MySQL con Docker:**
    Inicia Docker Desktop y, desde la carpeta `eaSports`, ejecuta:
    ```bash
-   docker compose up -d
+   docker compose -f backend/docker-compose.yml up -d
    ```
 
 4. **Revisar y ejecutar las migraciones:**
    Primero revisa qué migraciones están aplicadas y cuáles faltan:
    ```bash
-   npm run db:migrate:status
+   npm --prefix backend run db:migrate:status
    ```
    Aplica las migraciones pendientes:
    ```bash
-   npm run db:migrate
+   npm --prefix backend run db:migrate
    ```
 
    Para cargar equipos y jugadores de League of Legends de Worlds 2024 (T1, G2 Esports y Gen.G), ejecuta:
    ```powershell
-   npm run db:seed:demo
+   npm --prefix backend run db:seed:demo
    ```
    El seeder agrega 15 perfiles/cuentas de jugador y asigna cada roster a un entrenador activo. Si no hay tres entrenadores activos, crea los que falten. Al volver a ejecutarlo, restaura las alineaciones demo: corrige los roles y las asignaciones de los rosters de T1, G2 y Gen.G; si quita asignaciones extra, conserva los perfiles de jugador.
 
    Cuentas demo de jugadores: `Jugador1@gmail.com` a `Jugador15@gmail.com`; la contraseña corresponde al número (por ejemplo, `Jugador1@gmail.com` / `Jugador1`). La cuenta existente `Jugador1@gmail.com`, vinculada a Faker, tendrá la contraseña `Jugador1` tras cargar el seeder. Si se crean entrenadores demo, sus credenciales se muestran en la salida del comando y usan el mismo patrón (`EntrenadorN@gmail.com` / `EntrenadorN`). Son credenciales públicas de demostración: no las uses en producción.
 
 5. **Configurar la autenticación:**
-   Crea un archivo `.env` en la raíz del proyecto con una clave aleatoria de al menos 32 caracteres y el origen del frontend:
+   Configura `backend/.env` con una clave aleatoria de al menos 32 caracteres y el origen del frontend:
    ```env
    JWT_SECRET=
    CLIENT_URL=http://localhost:5173
@@ -66,24 +68,24 @@ Para ejecutar este proyecto de manera local, necesitas tener instalado:
 6. **Crear el primer administrador:**
    El comando de bootstrap solo crea un admin si todavía no existe ninguno. Completa `ADMIN_EMAIL` y `ADMIN_PASSWORD` localmente en `.env` ; la contraseña debe tener al menos 8 caracteres:
    ```powershell
-   npm run user:create-admin
+   npm --prefix backend run user:create-admin
    ```
 
    Si ya existe exactamente un admin y cambiaste `ADMIN_EMAIL` o `ADMIN_PASSWORD` en `.env`, actualiza sus credenciales sin borrar la base de datos:
    ```powershell
-   npm run user:update-admin
+   npm --prefix backend run user:update-admin
    ```
    Este comando conserva el resto de los datos. Se detiene si hay varios admins o si el nuevo correo ya pertenece a otra cuenta.
 
 ## Ejecución del Servidor
 
-Para iniciar el servidor en modo desarrollo (con recarga automática):
+Desde la carpeta del proyecto, inicia el servidor en modo desarrollo (con recarga automática):
 
 ```bash
-npm run dev
+npm --prefix backend run dev
 ```
 
-El servidor estará escuchando en http://localhost:3000. Para iniciarlo sin recarga automática usa `npm start`.
+El servidor estará escuchando en http://localhost:3000. Para iniciarlo sin recarga automática usa `npm --prefix backend start`.
 
 ## Ejecución del Frontend
 
@@ -97,9 +99,11 @@ npm run dev
 
 Abre http://localhost:5173 e inicia sesión con una cuenta existente.
 
-Desde la pantalla de inicio de sesión, una persona puede seleccionar **Crear Cuenta**, elegir una cuenta de entrenador o jugador y usar correo/contraseña o Google. Las solicitudes no crean acceso inmediatamente: un administrador debe abrir **Solicitudes** y aprobarlas o rechazarlas. Al aprobar una solicitud de jugador también se crea su perfil; al rechazarla, se elimina.
+Desde la pantalla de inicio de sesión, una persona puede seleccionar **Crear Cuenta**. El formulario abre con Jugador seleccionado e incluye nickname, nombre real, país y rol de juego; también permite solicitar una cuenta de entrenador y usar correo/contraseña o Google. Las solicitudes no crean acceso inmediatamente: un administrador debe abrir **Solicitudes** y aprobarlas o rechazarlas. Al aprobar una solicitud de jugador también se crea su perfil; al rechazarla, se elimina.
 
-La tabla de solicitudes requiere aplicar las migraciones pendientes con `npm run db:migrate` desde la carpeta raíz `eaSports`.
+Desde **Cuentas**, un administrador puede crear una cuenta y elegir el rol de administrador, entrenador o jugador. El nickname y los datos del perfil solo se solicitan para jugadores; el perfil se genera junto con la cuenta y no se selecciona ni vincula uno existente. Al editar roles, las cuentas admin no cambian de rol; Jugador puede pasar a Entrenador y Entrenador a Jugador completando un perfil nuevo.
+
+La tabla de solicitudes requiere aplicar las migraciones pendientes con `npm --prefix backend run db:migrate` desde la carpeta raíz `eaSports`.
 
 ## Pruebas E2E con Playwright
 
@@ -119,7 +123,7 @@ Las rutas `GET /api/v1/jugadores`, `GET /api/v1/jugadores/:id`, `GET /api/v1/ros
 
 ## Probar la API con REST Client
 
-Con el servidor y MySQL en ejecución, abre `test-collection.http` en Visual Studio Code y ejecuta las solicitudes en orden con la extensión REST Client. La colección incluye casos de éxito y error para jugadores, rosters y asignaciones, y reutiliza IDs capturados de respuestas anteriores.
+Con el servidor y MySQL en ejecución, abre `backend/test-collection.http` en Visual Studio Code y ejecuta las solicitudes en orden con la extensión REST Client. La colección incluye casos de éxito y error para jugadores, rosters y asignaciones, y reutiliza IDs capturados de respuestas anteriores.
 
 ## Reglas de Negocio Implementadas
 * **RN-01:** El nickname de un jugador debe ser único.

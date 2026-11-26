@@ -459,7 +459,7 @@
       },
       "post": {
         "summary": "Crear cuenta",
-        "description": "Disponible solo para admin. La cuenta se crea activa; la contraseña requiere al menos 8 caracteres. Para rol jugador, id_jugador debe vincularse a un perfil existente no asociado a otra cuenta.",
+        "description": "Disponible solo para admin. La cuenta se crea activa. Para auth_method=password, password es obligatorio y requiere al menos 8 caracteres; para Google no se envía password. Si rol es jugador, se envían los datos del perfil en jugador y el backend crea la cuenta y el perfil en una transacción.",
         "tags": [
           "Cuentas"
         ],
@@ -476,8 +476,7 @@
               "schema": {
                 "type": "object",
                 "required": [
-                  "email",
-                  "password"
+                  "email"
                 ],
                 "properties": {
                   "email": {
@@ -489,7 +488,15 @@
                     "format": "password",
                     "minLength": 8,
                     "maxLength": 72,
-                    "description": "Al menos 8 caracteres y un máximo de 72 bytes UTF-8."
+                    "description": "Obligatoria con auth_method=password; al menos 8 caracteres y un máximo de 72 bytes UTF-8."
+                  },
+                  "auth_method": {
+                    "type": "string",
+                    "enum": [
+                      "password",
+                      "google"
+                    ],
+                    "default": "password"
                   },
                   "rol": {
                     "type": "string",
@@ -500,11 +507,44 @@
                     ],
                     "default": "entrenador"
                   },
-                  "id_jugador": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "description": "Obligatorio si rol es jugador; debe ser un perfil existente sin otra cuenta vinculada.",
-                    "example": 1
+                  "display_name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "description": "Nombre requerido para cuentas no jugador con auth_method=password."
+                  },
+                  "jugador": {
+                    "type": "object",
+                    "description": "Obligatorio si rol es jugador. Estos datos crean el perfil asociado a la cuenta.",
+                    "required": [
+                      "nickname",
+                      "nombre_real",
+                      "pais",
+                      "rol"
+                    ],
+                    "properties": {
+                      "nickname": {
+                        "type": "string",
+                        "maxLength": 255
+                      },
+                      "nombre_real": {
+                        "type": "string",
+                        "maxLength": 255
+                      },
+                      "pais": {
+                        "type": "string",
+                        "maxLength": 255
+                      },
+                      "rol": {
+                        "type": "string",
+                        "enum": [
+                          "Top",
+                          "Jungle",
+                          "Mid",
+                          "ADC",
+                          "Support"
+                        ]
+                      }
+                    }
                   }
                 }
               }
@@ -532,15 +572,15 @@
             "description": "Se requiere rol admin o token CSRF válido."
           },
           "409": {
-            "description": "Ya existe una cuenta con ese correo."
+            "description": "Ya existe una cuenta con ese correo o un jugador con ese nickname."
           }
         }
       }
     },
     "/usuarios/{id}": {
       "put": {
-        "summary": "Cambiar rol, estado o perfil vinculado de una cuenta",
-        "description": "Disponible solo para admin. No permite cambiar el propio rol/estado ni quitar acceso al último admin activo. El rol jugador requiere id_jugador; solo una cuenta puede vincular cada perfil.",
+        "summary": "Cambiar rol, estado o nombre de una cuenta",
+        "description": "Disponible solo para admin. Las cuentas admin no pueden cambiar de rol y no se puede asignar ese rol a cuentas existentes. Una cuenta jugador puede cambiar a entrenador. Para cambiar una cuenta entrenador a jugador, se deben enviar los datos del nuevo perfil en jugador; la creación del perfil y el cambio de rol son transaccionales. No permite cambiar el propio estado ni quitar acceso al último admin activo.",
         "tags": [
           "Cuentas"
         ],
@@ -584,12 +624,44 @@
                       "inactivo"
                     ]
                   },
-                  "id_jugador": {
-                    "type": "integer",
-                    "minimum": 1,
-                    "nullable": true,
-                    "description": "Perfil a vincular; obligatorio cuando el rol resultante es jugador. En otros roles se limpia.",
-                    "example": 1
+                  "display_name": {
+                    "type": "string",
+                    "maxLength": 255,
+                    "nullable": true
+                  },
+                  "jugador": {
+                    "type": "object",
+                    "description": "Obligatorio al cambiar una cuenta entrenador a jugador. Crea el perfil que quedará asociado.",
+                    "required": [
+                      "nickname",
+                      "nombre_real",
+                      "pais",
+                      "rol"
+                    ],
+                    "properties": {
+                      "nickname": {
+                        "type": "string",
+                        "maxLength": 255
+                      },
+                      "nombre_real": {
+                        "type": "string",
+                        "maxLength": 255
+                      },
+                      "pais": {
+                        "type": "string",
+                        "maxLength": 255
+                      },
+                      "rol": {
+                        "type": "string",
+                        "enum": [
+                          "Top",
+                          "Jungle",
+                          "Mid",
+                          "ADC",
+                          "Support"
+                        ]
+                      }
+                    }
                   }
                 }
               }
@@ -608,7 +680,7 @@
             }
           },
           "400": {
-            "description": "ID, rol o estado inválido."
+            "description": "ID, rol, estado o perfil de jugador inválido/incompleto."
           },
           "401": {
             "description": "Autenticación requerida."
@@ -620,7 +692,7 @@
             "description": "Cuenta no encontrada."
           },
           "409": {
-            "description": "Acción no permitida para la cuenta propia o el último admin activo."
+            "description": "Cambio de rol admin no permitido, acción sobre la cuenta propia o último admin activo, o nickname duplicado."
           }
         }
       }
@@ -890,7 +962,7 @@
       },
       "delete": {
         "summary": "Eliminar un jugador",
-        "description": "Disponible solo para admin.",
+        "description": "Disponible solo para admin. Elimina el perfil y, si está vinculada, también la cuenta. No se permite mientras el jugador pertenezca a uno o más rosters; primero hay que quitarlo de todos. La operación es transaccional.",
         "tags": [
           "Jugadores"
         ],
@@ -929,6 +1001,19 @@
                 },
                 "example": {
                   "error": "Jugador no encontrado"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "El jugador pertenece a uno o más rosters y primero debe quitarse de todos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "example": {
+                  "error": "No se puede eliminar un jugador que pertenece a un roster. Quítalo de todos los rosters primero."
                 }
               }
             }

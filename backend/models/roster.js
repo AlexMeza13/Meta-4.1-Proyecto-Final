@@ -24,16 +24,6 @@ module.exports = (sequelize, DataTypes) => {
     juego: DataTypes.STRING,
     tipo: DataTypes.STRING,
     temporada: DataTypes.STRING,
-    id_entrenador: {
-      type: DataTypes.INTEGER,
-      allowNull: true,
-      references: {
-        model: 'Usuarios',
-        key: 'id'
-      },
-      onUpdate: 'CASCADE',
-      onDelete: 'SET NULL'
-    }
   }, {
     sequelize,
     modelName: 'Roster',

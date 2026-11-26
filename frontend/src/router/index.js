@@ -1,12 +1,14 @@
 import { ref } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
-import CuentasView from '../components/CuentasView.vue';
-import GrupoJugadorView from '../components/GrupoJugadorView.vue';
-import JugadoresView from '../components/JugadoresView.vue';
-import LoginView from '../components/LoginView.vue';
-import NoEncontradaView from '../components/NoEncontradaView.vue';
-import RostersView from '../components/RostersView.vue';
-import SolicitudesView from '../components/SolicitudesView.vue';
+import AcercaDeView from '../views/AcercaDeView.vue';
+import CuentasView from '../views/CuentasView.vue';
+import GrupoJugadorView from '../views/GrupoJugadorView.vue';
+import JugadoresView from '../views/JugadoresView.vue';
+import LoginView from '../views/LoginView.vue';
+import NoEncontradaView from '../views/NoEncontradaView.vue';
+import RostersView from '../views/RostersView.vue';
+import SolicitudesView from '../views/SolicitudesView.vue';
+import VistasPublicasView from '../views/VistasPublicasView.vue';
 
 export const sesionActiva = ref(null);
 export const sesionLista = ref(false);
@@ -14,6 +16,8 @@ export const sesionLista = ref(false);
 const rutas = [
   { path: '/', redirect: { name: 'login' } },
   { path: '/iniciar-sesion', name: 'login', component: LoginView, meta: { publico: true } },
+  { path: '/acerca-de', name: 'acerca-de', component: AcercaDeView, meta: { publico: true } },
+  { path: '/vistas-publicas', name: 'vistas-publicas', component: VistasPublicasView, meta: { publico: true } },
   { path: '/jugadores', name: 'jugadores', component: JugadoresView, meta: { roles: ['admin', 'entrenador'], panel: true } },
   { path: '/rosters', name: 'rosters', component: RostersView, meta: { roles: ['admin', 'entrenador'], panel: true } },
   { path: '/cuentas', name: 'cuentas', component: CuentasView, meta: { roles: ['admin'], panel: true } },
@@ -32,7 +36,7 @@ enrutador.beforeEach((destino) => {
   if (!sesionLista.value) return true;
 
   if (destino.meta.publico) {
-    if (!sesionActiva.value) return true;
+    if (!sesionActiva.value || destino.name !== 'login') return true;
     return sesionActiva.value.rol === 'jugador'
       ? { name: 'grupo-jugador' }
       : { name: 'jugadores' };
